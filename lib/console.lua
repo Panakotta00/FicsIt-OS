@@ -195,6 +195,7 @@ function console.createTTY(input, output)
 					elseif tokendata.p1 == 3 then
 						-- clear everything
 						self.cachedLines = {""}
+						self:setCursor(1, 1)
 					end
 				elseif c == "K" then
 					if (tokendata.p1 or 0) == 0 then
