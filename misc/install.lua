@@ -52,8 +52,9 @@ local tree = {
 		"boot",
 		{"10_core.lua"},
 		{"50_gpu.lua"},
-		{"100_shell.lua"},
+		{"100_term.lua"},
 		{"120_gui.lua"},
+		{"200_shell.lua"},
 		{"run.lua"}
 	},
 	{
