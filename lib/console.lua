@@ -362,13 +362,18 @@ function console.readLine(input, output, extensionFunc)
 	local token, tokendata
 	local update = false
 	local cursorOffset = 0
+	local continue = true
 	while true do
 		if buffer:len() == 0 then
 			buffer = input:read()
 		end
 		if buffer:len() > 0 then
 			buffer, token, tokendata = console.nextToken(buffer)
-			if token == "text" or token == "return" then
+			if extensionFunc then
+				continue, update, inputText, cursorOffset = extensionFunc(0, inputText, cursorOffset, token, tokendata)
+			end
+			if not continue then
+			elseif token == "text" or token == "return" then
 				output:write(tokendata .. inputText:sub(inputText:len() - cursorOffset + 1) .. "\x1B[" .. cursorOffset .. "D")
 				inputText = inputText:sub(1, inputText:len() - cursorOffset) .. tokendata .. inputText:sub(inputText:len() - cursorOffset + 1)
 			elseif token == "newline" then
@@ -380,20 +385,18 @@ function console.readLine(input, output, extensionFunc)
 			elseif token == "esc" then
 				if tokendata.c == "S" or tokendata.c == "T" then
 					output:write(tokendata.t)
-                elseif tokendata.c == "C" then
-                    -- move right
-                    if cursorOffset > 0 then
-                        cursorOffset = cursorOffset - 1
-                        output:write("\x1B[1C")
-                    end
-                elseif tokendata.c == "D" then
-                    -- move left
-                    if cursorOffset < inputText:len() then
-                        cursorOffset = cursorOffset + 1
-                        output:write("\x1B[1D")
-                    end
-                elseif extensionFunc then
-                    update, inputText, cursorOffset = extensionFunc(0, inputText, cursorOffset, tokendata)
+				elseif tokendata.c == "C" then
+					-- move right
+					if cursorOffset > 0 then
+						cursorOffset = cursorOffset - 1
+						output:write("\x1B[1C")
+					end
+				elseif tokendata.c == "D" then
+					-- move left
+					if cursorOffset < inputText:len() then
+						cursorOffset = cursorOffset + 1
+						output:write("\x1B[1D")
+					end
 				end
 			end
 		else

@@ -67,9 +67,12 @@ end
 
 local function parseArgs(tokens)
 	local args = {}
+	local textRanges = {}
 	local inString = ""
 	local isEscape = 0
+	local len = 0
 	for _, token in pairs(tokens) do
+		len = len + token.data:len()
 		if inString:len() > 0 then
 			if token.type == "quote" and token.data == inString and isEscape <= 0 then
 				inString = ""
@@ -80,26 +83,40 @@ local function parseArgs(tokens)
 					isEscape = 0
 				end
 				args[#args] = args[#args] .. token.data
+				textRanges[#textRanges].stop = len
+				textRanges[#textRanges].start = len - args[#args]:len()
 			end
 		else
 			if token.type == "text" then
 				if isEscape > 0 then
 					args[#args] = args[#args] .. token.data
+					textRanges[#textRanges].stop = len
+					textRanges[#textRanges].start = len - args[#args]:len()
 				else
 					table.insert(args, token.data)
+					table.insert(textRanges, {start = len - token.data:len(), stop = len})
+					last = len
 				end
 			elseif token.type == "quote" then
 				inString = token.data
 				table.insert(args, "")
+				table.insert(textRanges, {start = len, stop = len})
+				last = len
 			elseif token.type == "escape" then
 				isEscape = true
 			elseif token.type == "whitespace" and isEscape == 1 then
 				args[#args] = args[#args] .. token.data
+				textRanges[#textRanges].stop = len
+				textRanges[#textRanges].start = len - args[#args]:len()
 				isEscape = 2
 			end
 		end
 	end
-	return args
+	return args, textRanges
+end
+
+local function toArg(string)
+	return string:gsub(" ", "\\ ")
 end
 
 function shell.execute(cmd)
@@ -165,17 +182,49 @@ function shell.createInteractiveShell()
 	
 	function obj:tick()
 		shell.write(process.running().environment["PWD"] .. " > ")
-		local cmd = console.readLine(shell.getInput(), shell.getOutput(), function(arg, text, off, data)
+		local tabIndex = 0
+		local prevTab = nil
+		local prevPath = nil
+		local cmd = console.readLine(shell.getInput(), shell.getOutput(), function(arg, text, off, token, data)
 			if arg == 0 then
-				if data.c == "A" then
-					self.historyOffset = math.min(self.maxHistoryOffset, self.historyOffset + 1)
-					return true, self:getHistory(), 0
-				elseif data.c == "B" then
-					self.historyOffset = math.max(0, self.historyOffset - 1)
-					return true, self:getHistory(), 0
+				if token == "text" then
+					if data == "\t" then
+						tabIndex = tabIndex + 1
+						local args, ranges = parseArgs(tokenize(text))
+						local arg = args[#args] or ""
+						local path = prevPath or arg:match(".*/") or ""
+						local name = prevTab or arg:match("[^/]*$")
+						prevTab = name
+						prevPath = path
+						local i = 0
+						local f_path = filesystem.path(process.running().environment["PWD"], path)
+						for _, child in pairs(filesystem.childs(f_path)) do
+							local m1, m2 = child:match("^(" .. name .. ")(.*)$")
+							if m1 then
+								i = i + 1
+								if tabIndex == i then
+									return false, true, text:sub(1, ranges[#ranges].start or 0) .. toArg(path .. child), 0
+								end
+							end
+						end
+						tabIndex = 0
+						return false, true, text:sub(1, ranges[#ranges].start or 0) .. toArg(path .. name), 0
+					end
+				end
+				prevTab = nil
+				prevPath = nil
+				tabIndex = 0
+				if token == "esc" then
+					if data.c == "A" then
+						self.historyOffset = math.min(self.maxHistoryOffset, self.historyOffset + 1)
+						return false, true, self:getHistory(), 0
+					elseif data.c == "B" then
+						self.historyOffset = math.max(0, self.historyOffset - 1)
+						return false, true, self:getHistory(), 0
+					end
 				end
 			end
-			return false, text, off
+			return true, false, text, off
 		end)
 		self:addHistory(cmd)
 		self.historyOffset = -1
