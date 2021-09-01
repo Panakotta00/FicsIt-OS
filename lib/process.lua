@@ -122,6 +122,7 @@ end
 
 function process.createPipe(from, to)
 	local stream = createPipeStream()
+	stream.isTTY = to.stdInput.isTTY
 	from.stdOutput = buffer.create("w", stream)
 	to.stdInput = buffer.create("r", stream)
 	from.stdOutput.mutex = to.stdInput.mutex

@@ -86,12 +86,13 @@ function console.createTTY(input, output)
 		output = output or require("shell").getOutput(),
 	}
 	_console.current = obj
+	obj.input.isTTY = true
+	obj.output.isTTY = true
 	
 	local function fixScroll(self)
 		local bottom = #self.cachedLines - self.scroll
 		local top = bottom - self.lastScreenHeight + 1
 		if bottom < self.cursorPosY then
-			print("fix scroll")
 			self:setScroll(self.scroll - (self.cursorPosY - bottom))
 		elseif top > self.cursorPosY then
 			self:setScroll(self.scroll + (top - self.cursorPosY))
@@ -271,6 +272,12 @@ function console.createTTY(input, output)
 	end
 
 	return obj
+end
+
+function console.isTTY(stream)
+	if stream.stream then
+	
+	end
 end
 
 function console.createConsole()

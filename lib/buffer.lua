@@ -6,7 +6,8 @@ function bufferLib.create(mode, stream)
 	local buffer = {
 		stream = stream,
 		buffer = "",
-		mutex = thread.mutex()
+		mutex = thread.mutex(),
+		isTTY = stream.isTTY
 	}
 	
 	local function readAll(self)

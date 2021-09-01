@@ -10,6 +10,7 @@ local console
 local prog
 local term
 term = process.create(function()
+	shell.getInput().isTTY = true
 	prog = process.create(function()
 		local ishell = shell.createInteractiveShell()
 		while true do
@@ -29,10 +30,12 @@ term = process.create(function()
 	end
 end)
 
+local started = false
 while true do
 	computer.skip()
 	if console then
-		console:handleInput(event.pull(0))
+		console:handleInput(event.pull(0.0))
 	end
+	computer.skip()
 	thread.tick()
 end

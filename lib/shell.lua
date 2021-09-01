@@ -198,13 +198,15 @@ function shell.createInteractiveShell()
 						prevTab = name
 						prevPath = path
 						local f_path = filesystem.path(process.running().environment["PWD"], path)
-						if #args < 1 or tabsProgs then
+						if #args < 1 or (#args == 1 and path:len() < 1)or tabsProgs then
 							tabsProgs = true
 							path = ""
 							f_path = "/bin/"
 						end
 						local i = 0
-						for _, child in pairs(filesystem.childs(f_path)) do
+						local children = filesystem.childs(f_path)
+						table.sort(children)
+						for _, child in pairs(children) do
 							local m1, m2 = child:match("^(" .. name .. ")(.*)$")
 							if m1 then
 								i = i + 1
@@ -222,6 +224,7 @@ function shell.createInteractiveShell()
 				end
 				prevTab = nil
 				prevPath = nil
+				tabsProgs = false
 				tabIndex = 0
 				if token == "esc" then
 					if data.c == "A" then
@@ -237,14 +240,14 @@ function shell.createInteractiveShell()
 		end)
 		self:addHistory(cmd)
 		self.historyOffset = -1
-		--s, err, ret = pcall(function()
+		s, err, ret = pcall(function()
 			shell.execute(cmd)
-		--[[end)
+		end)
 		print(s, err, ret)
 		if not s then
 			print(s, err)
 			shell.writeLine(err)
-		end]]--
+		end
 	end
 
 	obj:getHistory()
