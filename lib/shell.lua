@@ -139,7 +139,11 @@ function shell.createInteractiveShell()
 
 	function obj:getHistory(offset)
 		offset = offset or self.historyOffset
-		local file = buffer.create("r", filesystem.open(self:getHistoryPath(), "r"))
+		local filestream = filesystem.open(self:getHistoryPath(), "r")
+		if not filestream.open() then
+			return ""
+		end
+		local file = buffer.create("r", filestream)
 		local history = {}
 		for line in file:lines() do
 			table.insert(history, line)
