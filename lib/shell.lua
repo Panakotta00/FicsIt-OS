@@ -185,6 +185,7 @@ function shell.createInteractiveShell()
 		local tabIndex = 0
 		local prevTab = nil
 		local prevPath = nil
+		local tabsProgs = false
 		local cmd = console.readLine(shell.getInput(), shell.getOutput(), function(arg, text, off, token, data)
 			if arg == 0 then
 				if token == "text" then
@@ -196,19 +197,27 @@ function shell.createInteractiveShell()
 						local name = prevTab or arg:match("[^/]*$")
 						prevTab = name
 						prevPath = path
-						local i = 0
 						local f_path = filesystem.path(process.running().environment["PWD"], path)
+						if #args < 1 or tabsProgs then
+							tabsProgs = true
+							path = ""
+							f_path = "/bin/"
+						end
+						local i = 0
 						for _, child in pairs(filesystem.childs(f_path)) do
 							local m1, m2 = child:match("^(" .. name .. ")(.*)$")
 							if m1 then
 								i = i + 1
 								if tabIndex == i then
-									return false, true, text:sub(1, ranges[#ranges].start or 0) .. toArg(path .. child), 0
+									if tabsProgs then
+										child = filesystem.path(4, child)
+									end
+									return false, true, text:sub(1, (ranges[#ranges] or {}).start or 0) .. toArg(path .. child), 0
 								end
 							end
 						end
 						tabIndex = 0
-						return false, true, text:sub(1, ranges[#ranges].start or 0) .. toArg(path .. name), 0
+						return false, true, text:sub(1, (ranges[#ranges] or {}).start or 0) .. toArg(path .. name), 0
 					end
 				end
 				prevTab = nil
