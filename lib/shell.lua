@@ -139,7 +139,7 @@ function shell.createInteractiveShell()
 
 	function obj:getHistory(offset)
 		offset = offset or self.historyOffset
-		if not filestream.isFile(self:getHistoryPath()) then
+		if not filesystem.isFile(self:getHistoryPath()) then
 			return ""
 		end
 		local file = buffer.create("r", filesystem.open(self:getHistoryPath(), "r"))
