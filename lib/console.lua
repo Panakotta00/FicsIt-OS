@@ -176,10 +176,13 @@ function console.createTTY(input, output)
 					self:setCursor(1, self.cursorPosY - (tokendata.p1 or 1))
 				elseif c == "G" then
 					-- set column
-					self:setCursor(tokendata.p1 or 1, self.cursorPosY)
+					local num = math.clamp(tokendata.p1 or 1, 1, self.lastScreenWidth)
+					self:setCursor(num, self.cursorPosY)
 				elseif c == "H" then
 					-- set cursor pos
-					self:setCursor(tokendata.p2 or 1, tokendata.p1 or 1)
+					local num1 = math.clamp(tokendata.p2 or 1, 1, self.lastScreenWidth + 1)
+					local num2 = math.clamp(tokendata.p1 or 1, 1, self.lastScreenHeight + 1)
+					self:setCursor(num1, num2)
 				elseif c == "J" then
 					if (tokendata.p1 or 0) == 0 then
 						-- clear from cursor till end of screen
