@@ -3,6 +3,7 @@ local console = require("console")
 local util = require("util")
 local thread = require("thread")
 local process = require("process")
+local buffer = require("buffer")
 
 local shell = {}
 
@@ -21,7 +22,7 @@ function shell.writeLine(text)
 end
 
 function shell.readLine()
-    return console.readLine(shell.getInput(), shell.getOutput())
+	return console.readLine(shell.getInput(), shell.getOutput())
 end
 
 function shell.getInput()
@@ -127,12 +128,54 @@ function shell.execute(cmd)
 end
 
 function shell.createInteractiveShell()
-	local obj = {}
+	local obj = {
+		historyOffset = -1,
+		maxHistoryOffset = 0,
+	}
+
+	function obj:getHistoryPath()
+		return process.running().environment["shell_history"] or "/.shell_history"
+	end
+
+	function obj:getHistory(offset)
+		offset = offset or self.historyOffset
+		local file = buffer.create("r", filesystem.open(self:getHistoryPath(), "r"))
+		local history = {}
+		for line in file:lines() do
+			table.insert(history, line)
+		end
+		file:close()
+		self.maxHistoryOffset = #history - 1
+		return history[#history - offset] or ""
+	end
+
+	function obj:addHistory(cmd)
+		local o_cmd = self:getHistory(0)
+		if o_cmd == cmd then
+			return
+		end
+		local file = filesystem.open(self:getHistoryPath(), "a")
+		file:write(cmd .. "\n")
+		file:close()
+		self.maxHistoryOffset = self.maxHistoryOffset + 1
+	end
 	
 	function obj:tick()
 		shell.write(process.running().environment["PWD"] .. " > ")
-		local cmd = console.readLine()
-		print("cmd:", cmd)
+		local cmd = console.readLine(shell.getInput(), shell.getOutput(), function(arg, text, off, data)
+			if arg == 0 then
+				if data.c == "A" then
+					self.historyOffset = math.min(self.maxHistoryOffset, self.historyOffset + 1)
+					return true, self:getHistory(), 0
+				elseif data.c == "B" then
+					self.historyOffset = math.max(0, self.historyOffset - 1)
+					return true, self:getHistory(), 0
+				end
+			end
+			return false, text, off
+		end)
+		self:addHistory(cmd)
+		self.historyOffset = -1
 		--s, err, ret = pcall(function()
 			shell.execute(cmd)
 		--[[end)
@@ -142,6 +185,8 @@ function shell.createInteractiveShell()
 			shell.writeLine(err)
 		end]]--
 	end
+
+	obj:getHistory()
 	
 	return obj
 end

@@ -353,10 +353,7 @@ function console.readTillCPR(stream, text)
 	end
 end
 
-function console.readLine(input, output)
-	local shell = require("shell")
-	input = input or shell.getInput()
-	output = output or shell.getOutput()
+function console.readLine(input, output, extensionFunc)
 	local inputText = ""
 	output:write("\x1B[6n")
 	local startY, startX = console.readTillCPR(input)
@@ -394,6 +391,8 @@ function console.readLine(input, output)
                         cursorOffset = cursorOffset + 1
                         output:write("\x1B[1D")
                     end
+                elseif extensionFunc then
+                    update, inputText, cursorOffset = extensionFunc(0, inputText, cursorOffset, tokendata)
 				end
 			end
 		else
