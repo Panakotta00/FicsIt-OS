@@ -17,10 +17,11 @@ local bUpdateCursor = false
 local bUpdateMenu = false
 local lastXCursor = 1
 local redrawLines = {}
-local redrawLinesUnder = {}
+local redrawLinesUnder = 999999
 local mode = 0
 local menu = 0
 local bInControl = false
+local bDone = true
 
 local function resize()
 	shell.write("\x1B[3J\x1B[6n\x1B[999;999H\x1B[6n\x1B[2J\x1B[6n")
@@ -37,7 +38,7 @@ local function updateCursor()
 end
 
 local function drawMenu()
-	shell.write("\x1B[" .. startY + height .. ";1H")
+	shell.write("\x1B[" .. startY + height - 1 .. ";1H")
 	if menu == 0 then
 		shell.write("[ Save ] Exit   Quit  ")
 	elseif menu == 1 then
@@ -67,9 +68,12 @@ end
 
 local function loadFile(path)
 	lines = {}
-	local file = buffer.create("r", filesystem.open(path, "r"))
-	for line in file:lines() do
-		table.insert(lines, line)
+	if filesystem.exists(path) and filesystem.isFile(path) then
+		print("sure?")
+		local file = buffer.create("r", filesystem.open(path, "r"))
+		for line in file:lines() do
+			table.insert(lines, line)
+		end
 	end
 end
 
@@ -160,6 +164,8 @@ local function editMode(token, tokendata)
 			setCursor(cursorX - 1, cursorY, true)
 			bUpdateCursor = true
 			lastXCursor = cursorX
+		elseif tokendata.c == "R" then
+			bDone = true
 		end
 	elseif token == "text" or token == "return" then
 		insertText(tokendata)
@@ -171,7 +177,7 @@ local function editMode(token, tokendata)
 		else
 			table.insert(lines, cursorY+1, lines[cursorY]:sub(cursorX))
 			lines[cursorY] = lines[cursorY]:sub(1, cursorX-1)
-			redrawLinesUnder[cursorY] = true
+			redrawLinesUnder = math.min(redrawLinesUnder, cursorY)
 		end
 		setCursor(1, cursorY+1)
 		lastXCursor = cursorX
@@ -184,7 +190,7 @@ local function editMode(token, tokendata)
 			end
 			setCursor(len, cursorY-1)
 			lastXCursor = cursorX
-			redrawLinesUnder[cursorY] = true
+			redrawLinesUnder = math.min(redrawLinesUnder, cursorY)
 		elseif cursorX > 1 then
 			lines[cursorY] = lines[cursorY]:sub(1, cursorX-2) .. lines[cursorY]:sub(cursorX)
 			setCursor(cursorX-1, cursorY)
@@ -232,6 +238,8 @@ local function menuMode(token, tokendata)
 			-- move left
 			menu = (menu - 1) % 3
 			bUpdateMenu = true
+		elseif tokendata.c == "R" then
+			bDone = true
 		end
 	elseif token == "newline" then
 		return commitMenu()
@@ -265,31 +273,40 @@ while true do
 			end
 		end
 	else
-		if bUpdateScreen then
-			bUpdateScreen = false,
-			draw()
-		end
-		for line in pairs(redrawLines) do
-			if isLineInRange(line) then
-				drawLine(line)
+		if bDone then
+			if bUpdateScreen then
+				bUpdateScreen = false,
+				draw()
+				bDone = false
 			end
-			bUpdateCursor = true
-		end
-		for line in pairs(redrawLinesUnder) do
-			if line < windowTop + height - 1 then
-				drawLineRange(line, windowTop + height - 1)
+			for line in pairs(redrawLines) do
+				if isLineInRange(line) then
+					drawLine(line)
+					bDone = false
+				end
+				bUpdateCursor = true
 			end
-			bUpdateCursor = true
-		end
-		redrawLines = {}
-		redrawLinesUnder = {}
-		if bUpdateCursor then
-			bUpdateCursor = false
-			updateCursor()
-		end
-		if bUpdateMenu then
-			bUpdateMenu = false
-			drawMenu()
+			if redrawLinesUnder < windowTop + height - 1 then
+				drawLineRange(redrawLinesUnder, windowTop + height - 1)
+				bDone = false
+				bUpdateCursor = true
+			end
+			redrawLines = {}
+			redrawLinesUnder = math.max(windowTop + height, #lines)
+			if bUpdateCursor then
+				bUpdateCursor = false
+				updateCursor()
+				bDone = false
+			end
+			if bUpdateMenu then
+				bUpdateMenu = false
+				drawMenu()
+				print("yay")
+				bDone = false
+			end
+			if not bDone then
+				shell.write("\x1B[6n")
+			end
 		end
 		coroutine.yield()
 		computer.skip()

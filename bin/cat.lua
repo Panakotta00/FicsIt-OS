@@ -10,4 +10,8 @@ for _, arg in pairs(args) do
 	local f = filesystem.open(path, "r")
 	shell.write(fs.readAll(f))
 	f:close()
+if shell.getOutput().isTTY then
+	shell.write("\n")
 end
+end
+

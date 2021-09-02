@@ -262,7 +262,6 @@ function term.createTTY(input, output)
 	function obj:write(text)
 		self.buffer = self.buffer .. text
 		local token, tokendata
-		start = computer.millis()
 		while self.buffer:len() > 0 do
 			computer.skip()
 			-- get end of this draw line from text
@@ -272,104 +271,14 @@ function term.createTTY(input, output)
 			elseif token == "return" then
 				self:setCursor(1, self.cursorPosY)
 			elseif token == "csi" then
-				--[[local handler = csiHandlers[tokendata.c]
-				if handler then
+				local handler = csiHandlers[tokendata.c]
+				if handler and not fuck then
 					handler(self, c, tokendata.p1, tokendata.p2)
-				end]]--
-				local c = tokendata.c
-				if c == "A" then
-					-- move up
-					self:setCursor(self.cursorPosX, self.cursorPosY - (tokendata.p1 or 1))
-				elseif c == "B" then
-					-- move down
-					self:setCursor(self.cursorPosX, self.cursorPosY + (tokendata.p1 or 1))
-				elseif c == "C" then
-					-- move right
-					self:setCursor(self.cursorPosX + (tokendata.p1 or 1), self.cursorPosY)
-				elseif c == "D" then
-					-- move left
-					self:setCursor(self.cursorPosX - (tokendata.p1 or 1), self.cursorPosY)
-				elseif c == "E" then
-					-- move next line beginning
-					self:setCursor(1, self.cursorPosY + (tokendata.p1 or 1))
-				elseif c == "F" then
-					-- move prev line beginning
-					self:setCursor(1, self.cursorPosY - (tokendata.p1 or 1))
-				elseif c == "G" then
-					-- set column
-					local num = math.clamp(tokendata.p1 or 1, 1, self.lastScreenWidth)
-					self:setCursor(num, self.cursorPosY)
-				elseif c == "H" then
-					-- set cursor pos
-					local num1 = math.clamp(tokendata.p2 or 1, 1, self.lastScreenWidth)
-					local num2 = math.clamp(tokendata.p1 or 1, 1, math.max(self.lastScreenHeight, #self.cachedLines))
-					self:setCursor(num1, num2)
-				elseif c == "J" then
-					if (tokendata.p1 or 0) == 0 then
-						-- clear from cursor till end of screen
-						self.cachedLines[self.cursorPosY] = self.cachedLines[self.cursorPosY]:sub(1, self.cursorPosX-1)
-						while #self.cachedLines > self.cursorPosY do
-							table.remove(self.cachedLines)
-						end
-					elseif tokendata.p1 == 1 then
-						-- clear from cursor till beginning of screen
-						self.cachedLines[self.cursorPosY] = string.rep(" ", self.cursorPosX) .. self.cachedLines[self.cursorPosY]:sub(self.cursorPosX+1)
-						-- TODO: clear lines from top till cursor
-					elseif tokendata.p1 == 2 then
-						-- clear screen
-						for i=1,self.lastScreenHeight,1 do
-							self.cachedLines[math.max(1, #self.cachedLines - self.scroll - i + 1)] = ""
-						end
-						self:setCursor(1, math.max(1, #self.cachedLines + self.scroll - self.lastScreenHeight))
-					elseif tokendata.p1 == 3 then
-						-- clear everything
-						self.cachedLines = {""}
-						self:setCursor(1, 1)
-					end
-				elseif c == "K" then
-					if (tokendata.p1 or 0) == 0 then
-						-- clear from cursor till end of line
-						self.cachedLines[self.cursorPosY] = self.cachedLines[self.cursorPosY]:sub(1, self.cursorPosX)
-					elseif tokendata.p1 == 1 then
-						-- clear from cursor till beginning of line
-						self.cachedLines[self.cursorPosY] = string.rep(" ", self.cursorPosX) .. self.cachedLines[self.cursorPosY]:sub(self.cursorPosX+1)
-					elseif tokendata.p1 == 2 then
-						-- clear entire line
-						self.cachedLines[self.cursorPosY] = ""
-					end
-				elseif c == "S" then
-					-- scroll up
-					self:setScroll(self.scroll+1)
-				elseif c == "T" then
-					-- scoll down
-					self:setScroll(self.scroll-1)
-				elseif c == "n" then
-					if tokendata.p1 == 6 then
-						-- request cursor pos
-						self.output:write("\x1B[" .. tostring(self.cursorPosY) .. ";" .. tostring(self.cursorPosX) .. "R")
-					end
-				elseif c == "h" then
-					if tokendata.p1 == 1049 and not self.bUseAlternative then
-						swap(self.alternative, self, "cachedLines")
-						swap(self.alternative, self, "cursorPosX")
-						swap(self.alternative, self, "cursorPosY")
-						swap(self.alternative, self, "scroll")
-						self.bUseAlternative = true
-					end
-				elseif c == "l" then
-					if tokendata.p1 == 1049 and self.bUseAlternative then
-						swap(self.alternative, self, "cachedLines")
-						swap(self.alternative, self, "cursorPosX")
-						swap(self.alternative, self, "cursorPosY")
-						swap(self.alternative, self, "scroll")
-						self.bUseAlternative = false
-					end
 				end
 			elseif token then
 				insertLine(self, tokendata)
 			end
 		end
-		if computer.millis() - start > 0 then print("delta:", computer.millis() - start) end
 	end
 	
 	function obj:clearLine()
