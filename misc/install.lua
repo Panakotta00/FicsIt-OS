@@ -62,6 +62,7 @@ local tree = {
 		{"cat.lua"},
 		{"cd.lua"},
 		{"clear.lua"},
+		{"edit.lua"},
 		{"ls.lua"},
 		{"mkdir.lua"},
 		{"pastebin.lua"},
