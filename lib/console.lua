@@ -109,6 +109,7 @@ function console.readLine(input, output, extensionFunc)
 	local update = false
 	local cursorOffset = 0
 	local continue = true
+	local finish
 	while true do
 		if buffer:len() == 0 then
 			buffer = input:read()
@@ -116,7 +117,10 @@ function console.readLine(input, output, extensionFunc)
 		if buffer:len() > 0 then
 			buffer, token, tokendata = term.nextToken(buffer)
 			if extensionFunc then
-				continue, update, inputText, cursorOffset = extensionFunc(0, inputText, cursorOffset, token, tokendata)
+				continue, update, inputText, cursorOffset, finish = extensionFunc(0, inputText, cursorOffset, token, tokendata)
+				if finish then
+					return inputText
+				end
 			end
 			if not continue then
 			elseif token == "text" or token == "return" then

@@ -40,11 +40,11 @@ end
 local function drawMenu()
 	shell.write("\x1B[25l\x1B[" .. startY + height - 1 .. ";1H")
 	if menu == 0 then
-		shell.write("[ Save ]  Exit    Quit  ")
+		shell.write("[ Exit ]  Save    Quit  ")
 	elseif menu == 1 then
-		shell.write("  Save  [ Exit ]  Quit  ")
+		shell.write("  Exit  [ Save ]  Quit  ")
 	elseif menu == 2 then
-		shell.write("  Save    Exit  [ Quit ]")
+		shell.write("  Exit    Save  [ Quit ]")
 	end
 	shell.write("\x1B[K")
 end
@@ -170,6 +170,7 @@ local function editMode(token, tokendata)
 		end
 	elseif token == "text" or token == "return" then
 		insertText(tokendata)
+		lastXCursor = cursorX
 	elseif token == "newline" then
 		bInControl = false
 		if not lines[cursorY] then
@@ -213,20 +214,33 @@ local function linesToString()
 end
 
 local function saveFile()
-	local file = filesystem.open(args[1], "w")
-	file:write(linesToString())
-	file:close()
+	if not args[1] then
+		shell.write("\x1B[2K\x1B[1GNew Filename: ")
+		args[1] = console.readLine(shell.getInput(), shell.getOutput(), function(arg, text, off, token, data)
+			if token == "esc" then
+				return false, false, "", 0, true
+			end
+			return true, false, text, off
+		end)
+		bUpdateScreen = true
+	end
+	if args[1] and args[1]:len() > 0 then
+		local file = filesystem.open(args[1], "w")
+		file:write(linesToString())
+		file:close()
+	end
 end
 
 local function commitMenu()
 	mode = 0
 	bUpdateScreen = true
 	if menu == 0 then
-		saveFile()
-	elseif menu == 1 then
 		shell.write("\x1B[1049l")
 		return true, 0
+	elseif menu == 1 then
+		saveFile()
 	end
+	menu = 0
 end
 
 local function menuMode(token, tokendata)
