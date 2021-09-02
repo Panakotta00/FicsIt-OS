@@ -4,11 +4,19 @@ local term = {}
 
 _term = {}
 
+local tokenPattern = "[\x1B\n\r\x08\x04]"
+local csiHeadPattern = "(\x1B%[)"
+local csiFullHeadPattern = "^" .. csiHeadPattern
+local csiKeyPattern = "([A-Za-z])"
+local csiParamsPattern = "(%d*)(;?)(%d*)"
+local csiFullPattern = "^(" .. csiHeadPattern .. csiParamsPattern .. csiKeyPattern .. ")"
+
 function term.nextToken(text) -- leftover, tokentype, tokendata
-	if text:len() == 0 then
+	local len = text:len()
+	if len == 0 then
 		return text, nil, nil
 	end
-	local escPos = text:find("[\x1B\n\r\x08\x04]")
+	local escPos = text:find(tokenPattern)
 	if not escPos then
 		return "", "text", text
 	end
@@ -28,14 +36,11 @@ function term.nextToken(text) -- leftover, tokentype, tokendata
 	if c == "\x04" then
 		return text:sub(2), nil, nil
 	end
-	if c == "\x1B" and text:len() >= 2 then
-		local head = "(\x1B%[)"
-		if text:find("^" .. head) then
-			local abbr = "([A-Za-z])"
-			local abbrPos = text:find(abbr)
-			if abbrPos then
-				local params = "(%d*)(;?)(%d*)"
-				local a, h, p1, s, p2, e = text:match("^(" .. head .. params .. abbr .. ")")
+	if c == "\x1B" and len >= 2 then
+		if text:find(csiFullHeadPattern) then
+			local csiKeyPos = text:find(csiKeyPattern)
+			if csiKeyPos then
+				local a, h, p1, s, p2, e = text:match(csiFullPattern)
 				if a then
 					if not s then
 						p1 = p1 .. p2
@@ -55,7 +60,7 @@ function term.nextToken(text) -- leftover, tokentype, tokendata
 							p2 = tonumber(p2)
 						end
 					end
-					return text:sub(abbrPos+1), "csi", {c=e, p1=p1, p2=p2, t=a}
+					return text:sub(csiKeyPos +1), "csi", { c=e, p1=p1, p2=p2, t=a}
 				else
 					return text:sub(3), "text", text:sub(1, 2)
 				end
@@ -154,6 +159,8 @@ function term.createTTY(input, output)
 		t2[name] = val
 	end
 	
+	local sgrHandlers = {}
+	
 	local csiHandlers = {
 		A = function(self, c, p1, p2)
 			-- move up
@@ -216,7 +223,7 @@ function term.createTTY(input, output)
 		K = function(self, c, p1, p2)
 			if (p1 or 0) == 0 then
 				-- clear from cursor till end of line
-				self.cachedLines[self.cursorPosY] = self.cachedLines[self.cursorPosY]:sub(1, self.cursorPosX)
+				self.cachedLines[self.cursorPosY] = self.cachedLines[self.cursorPosY]:sub(1, self.cursorPosX-1)
 			elseif p1 == 1 then
 				-- clear from cursor till beginning of line
 				self.cachedLines[self.cursorPosY] = string.rep(" ", self.cursorPosX) .. self.cachedLines[self.cursorPosY]:sub(self.cursorPosX+1)
@@ -246,6 +253,8 @@ function term.createTTY(input, output)
 				swap(self.alternative, self, "cursorPosY")
 				swap(self.alternative, self, "scroll")
 				self.bUseAlternative = true
+			elseif p1 == 25 then
+				self.cursorVisible = true
 			end
 		end,
 		l = function(self, c, p1, p2)
@@ -255,6 +264,14 @@ function term.createTTY(input, output)
 				swap(self.alternative, self, "cursorPosY")
 				swap(self.alternative, self, "scroll")
 				self.bUseAlternative = false
+			elseif p1 == 25 then
+				self.cursorVisible = false
+			end
+		end,
+		m = function(self, c, p1, p2)
+			local handler = sgrHandlers[p1]
+			if handler then
+				handler()
 			end
 		end
 	}
@@ -305,7 +322,7 @@ function term.createTTY(input, output)
 			
 			buffer:setText(0, y-1, line, {1,1,1,1}, nil)
 			
-			if lineIndex == self.cursorPosY then
+			if lineIndex == self.cursorPosY and self.cursorVisible then
 				c, f, b = buffer:get(self.cursorPosX-1, y-1)
 				if not f or f.a <= 0 then
 					f = {1,1,1,1}

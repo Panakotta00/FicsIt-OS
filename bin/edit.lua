@@ -38,19 +38,19 @@ local function updateCursor()
 end
 
 local function drawMenu()
-	shell.write("\x1B[" .. startY + height - 1 .. ";1H")
+	shell.write("\x1B[25l\x1B[" .. startY + height - 1 .. ";1H")
 	if menu == 0 then
-		shell.write("[ Save ] Exit   Quit  ")
+		shell.write("[ Save ]  Exit    Quit  ")
 	elseif menu == 1 then
-		shell.write("  Save [ Exit ] Quit  ")
+		shell.write("  Save  [ Exit ]  Quit  ")
 	elseif menu == 2 then
-		shell.write("  Save   Exit [ Quit ]")
+		shell.write("  Save    Exit  [ Quit ]")
 	end
 	shell.write("\x1B[K")
 end
 
 local function draw()
-	local str = "\x1B[" .. startY .. ";" .. startX .. "H\x1B[J"
+	local str = "\x1B[25h\x1B[" .. startY .. ";" .. startX .. "H\x1B[J"
 	local visible
 	for y=windowTop, math.min(#lines, windowTop+height-1), 1 do
 		visible = lines[y]:sub(windowLeft, windowLeft+width)
@@ -69,7 +69,6 @@ end
 local function loadFile(path)
 	lines = {}
 	if filesystem.exists(path) and filesystem.isFile(path) then
-		print("sure?")
 		local file = buffer.create("r", filesystem.open(path, "r"))
 		for line in file:lines() do
 			table.insert(lines, line)

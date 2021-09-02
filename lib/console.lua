@@ -102,7 +102,7 @@ end
 
 function console.readLine(input, output, extensionFunc)
 	local inputText = ""
-	output:write("\x1B[6n")
+	output:write("\x1B[25h\x1B[6n")
 	local startY, startX = console.readTillCPR(input)
 	local buffer = ""
 	local token, tokendata
@@ -124,6 +124,7 @@ function console.readLine(input, output, extensionFunc)
 				inputText = inputText:sub(1, inputText:len() - cursorOffset) .. tokendata .. inputText:sub(inputText:len() - cursorOffset + 1)
 			elseif token == "newline" then
 				output:write(tokendata)
+				output:write("\x1B[25l")
 				return inputText
 			elseif token == "backspace" then
 				inputText = inputText:sub(1, inputText:len()-cursorOffset-1) .. inputText:sub(inputText:len()-cursorOffset+1)

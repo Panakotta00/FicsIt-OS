@@ -138,7 +138,7 @@ function shell.execute(cmd)
 	end
 	local prog = filesystem.loadFile(path)
 	if type(prog) ~= "function" then
-		shell.writeLine("Unable to load program")
+		shell.writeLine("Unable to load program\n" .. prog)
 		return -2
 	end
 	return prog(table.unpack(args))

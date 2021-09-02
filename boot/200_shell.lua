@@ -16,7 +16,7 @@ process.createPipe(terminal, prog)
 while true do
 	computer.skip()
 	if console then
-		console:handleInput(event.pull(0.0))
+		console:handleInput(event.pull(0))
 	end
 	computer.skip()
 	thread.tick()
