@@ -15,7 +15,6 @@
 		local text2 = gui.createText("oh boy!")
 		canvas:addChild(text2, 5, 2)
 		local button = gui.createButton(function()
-			print("hammer!")
 			computer.beep()
 		end, gui.createText("OK!"))
 		button.name = "button"
@@ -34,7 +33,6 @@ end]]--
 --[[
 local gpu = computer.getPCIDevices(findClass("GPU_T1_C"))[1]
 local screen = computer.getPCIDevices(findClass("FINComputerScreen"))[1]
-print(screen)
 --screen = component.proxy(component.findComponent(findClass("Screen"))[1])
 gpu:bindScreen(screen)
 event.listen(gpu)

@@ -226,7 +226,7 @@ function shell.createInteractiveShell()
 				prevPath = nil
 				tabsProgs = false
 				tabIndex = 0
-				if token == "esc" then
+				if token == "csi" then
 					if data.c == "A" then
 						self.historyOffset = math.min(self.maxHistoryOffset, self.historyOffset + 1)
 						return false, true, self:getHistory(), 0

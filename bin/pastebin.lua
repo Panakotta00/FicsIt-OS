@@ -71,7 +71,6 @@ if sub == "run" then
 	f:write(text)
 	f:close()
 	local f = filesystem.loadFile("tmp.lua")
-	print(f)
 	f()
 end
 

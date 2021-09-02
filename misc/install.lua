@@ -78,6 +78,7 @@ local tree = {
 		{"math.lua"},
 		{"process.lua"},
 		{"shell.lua"},
+		{"term.lua"},
 		{"thread.lua"},
 		{"util.lua"}
 	}

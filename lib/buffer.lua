@@ -6,7 +6,6 @@ function bufferLib.create(mode, stream)
 	local buffer = {
 		stream = stream,
 		buffer = "",
-		mutex = thread.mutex(),
 		isTTY = stream.isTTY
 	}
 	
@@ -75,7 +74,6 @@ function bufferLib.create(mode, stream)
 	end
 	
 	function buffer:read(mode)
-		self.mutex:lock()
 		if type(mode) == "string" then
 			if mode:sub(1,1) == "*" then
 				mode = mode:sub(2)
@@ -83,23 +81,18 @@ function bufferLib.create(mode, stream)
 			local format = mode:sub(1,1)
 			if format == "n" then
 				local n = readNumber(self)
-				self.mutex:unlock()
 				return n
 			elseif format == "l" or format == "L" then
 				local l = readLine(self)
-				self.mutex:unlock()
 				return l
 			elseif format == "a" then
 				local a = readAll(self)
-				self.mutex:unlock()
 				return a
 			else
-				self.mutex:unlock()
 				error("invalid read format given")
 			end
 		elseif mode then
 			local c = self.stream:read(mode)
-			self.mutex:unlock()
 			return c
 		else
 			if self.buffer:len() == 0 then
@@ -107,43 +100,33 @@ function bufferLib.create(mode, stream)
 			end
 			local str = self.buffer
 			self.buffer = ""
-			self.mutex:unlock()
 			return str
 		end
 	end
 	
 	function buffer:lines()
 		return function()
-			self.mutex:lock()
 			if self.buffer:len() == 0 and not self:readChunk() then
-				self.mutex:unlock()
 				return nil
 			end
 			local l = readLine(self)
-			self.mutex:unlock()
 			return l
 		end
 	end
 	
 	function buffer:write(str)
-		self.mutex:lock()
 		self.stream:write(str)
-		self.mutex:unlock()
 	end
 	
 	function buffer:close()
-		self.mutex:lock()
 		self.stream:close()
-		self.mutex:unlock()
 	end
 	
 	function buffer:seek(whence, offset)
-		self.mutex:lock()
 		local off, reason = self.stream:seek(whence, offset)
 		if off then
 			self.buffer = ""
 		end
-		self.mutex:unlock()
 		return off, reason
 	end
 	

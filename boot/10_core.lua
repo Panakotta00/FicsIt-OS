@@ -16,7 +16,6 @@ function require(libName)
 	local libFunc = filesystem.loadFile(libPath)
 	if type(libFunc) ~= "function" then
 		print("Lib: failed to load Lib '" .. libPath .. "'!")
-		print(libFunc)
 	else
 		lib = libFunc()
 		_libCache[libName] = lib
