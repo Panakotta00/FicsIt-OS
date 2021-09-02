@@ -15,9 +15,13 @@ process.createPipe(terminal, prog)
 
 while true do
 	computer.skip()
-	if console then
-		console:handleInput(event.pull(0))
+	local canSleep = thread.tick()
+	local timeout = 0
+	if canSleep then
+		timeout = 0.0
 	end
 	computer.skip()
-	thread.tick()
+	if console then
+		console:handleInput(event.pull(timeout))
+	end
 end

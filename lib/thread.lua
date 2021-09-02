@@ -1,6 +1,7 @@
 _thread = {
 	threads = {},
-	current = 0
+	current = 0,
+	runWithoutLimit = true,
 }
 
 local threadLib = {}
@@ -52,6 +53,7 @@ function threadLib.tick()
 	if #_thread.threads > 0 then
 		if _thread.current >= #_thread.threads then
 			_thread.current = 0
+			runWithoutLimit = true
 		end
 		_thread.current = _thread.current + 1
 		local tickThread = _thread.threads[_thread.current]
@@ -68,9 +70,15 @@ function threadLib.tick()
 					print(debug.traceback(tickThread.co))
 				end
 				tickThread:stop()
+			elseif not success then
+				runWithoutLimit = false
 			end
 		end
 	end
+	if _thread.current >= #_thread.threads then
+		return runWithoutLimit
+	end
+	return false
 end
 
 function threadLib.mutex()

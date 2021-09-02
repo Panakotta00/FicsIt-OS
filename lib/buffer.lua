@@ -63,7 +63,7 @@ function bufferLib.create(mode, stream)
 	end
 	
 	function buffer:readChunk()
-		local str = self.stream:read(1024)
+		local str = self.stream:read(8192)
 		if str then
 			if str:len() > 0 then
 				self.buffer = self.buffer .. str

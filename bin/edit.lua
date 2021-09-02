@@ -50,7 +50,7 @@ local function drawMenu()
 end
 
 local function draw()
-	local str = "\x1B[25h\x1B[" .. startY .. ";" .. startX .. "H\x1B[J"
+	local str = "\x1B[25l\x1B[" .. startY .. ";" .. startX .. "H\x1B[J"
 	local visible
 	for y=windowTop, math.min(#lines, windowTop+height-1), 1 do
 		visible = lines[y]:sub(windowLeft, windowLeft+width)
@@ -63,6 +63,8 @@ local function draw()
 	updateCursor()
 	if mode == 1 then
 		drawMenu()
+	else
+		shell.write("\x1B[25h")
 	end
 end
 
@@ -300,7 +302,6 @@ while true do
 			if bUpdateMenu then
 				bUpdateMenu = false
 				drawMenu()
-				print("yay")
 				bDone = false
 			end
 			if not bDone then
