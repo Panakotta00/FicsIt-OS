@@ -183,6 +183,9 @@ local function uninstall(id)
 	
 	-- call post events
 	packageLib.visitEvents(package, "uninstall", "post", doSourceVisitor)
+	
+	-- remove package cache
+	filesystem.remove(path)
 end
 
 local args = {...}
