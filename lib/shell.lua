@@ -35,84 +35,81 @@ function shell.getOutput()
 	return p.stdOutput
 end
 
-local function nextToken(text)
-	local start, stop = text:find("^[%c ]+")
-	if start then
-		return text:sub(stop+1), "whitespace", text:sub(start, stop)
+local function nextToken(str)
+	local pos = str:find("[%s\"'\\]")
+	if not pos then
+		return "", "text", str
 	end
-	local start, stop = text:find("^[\"'`]")
-	if start then
-		return text:sub(stop+1), "quote", text:sub(start, stop)
+	if pos > 1 then
+		return str:sub(pos), "text", str:sub(1, pos-1)
 	end
-	local start, stop = text:find("^\"")
-	if start then
-		return text:sub(stop+1), "escape", "\\"
+	local c = str:sub(1,1)
+	if c == "\"" or c == "'" then
+		return str:sub(pos+1), "quote", c
 	end
-
-	local start, stop = text:find("^[^%c\"' ]+")
-	if start then
-		return text:sub(stop+1), "text", text:sub(start, stop)
+	if c == "\\" then
+		return str:sub(pos+1), "esc", c
 	end
-	return text, "none", ""
+	return str:sub(pos+1), "whitespace", c
 end
 
-local function tokenize(cmd)
-	local tokens = {}
-	while cmd:len() > 0 do
-		cmd, token, tokendata = nextToken(cmd)
-		table.insert(tokens, {type = token, data = tokendata})
-	end
-	return tokens
-end
-
-local function parseArgs(tokens)
+local function parseArgs(inst)
 	local args = {}
-	local textRanges = {}
-	local inString = ""
-	local isEscape = 0
-	local len = 0
-	for _, token in pairs(tokens) do
-		len = len + token.data:len()
-		if inString:len() > 0 then
-			if token.type == "quote" and token.data == inString and isEscape <= 0 then
-				inString = ""
+	local argsMeta = {}
+	local arg = {}
+	local argMeta = {plain=true}
+	local isInString = nil
+	local isEscaped = false
+	
+	local pos = 1
+	while inst:len() > 0 do
+		local token, tokenData
+		inst, token, tokenData = nextToken(inst)
+		if token == "text" then
+			table.insert(arg, tokenData)
+			argMeta.start = argMeta.start or pos
+		elseif token == "quote" then
+			if isEscaped or (isInString and isInString ~= tokenData) then
+				table.insert(arg, tokenData)
+				argMeta.start = argMeta.start or pos
+				argMeta.plain = false
+				isEscaped = false
+			elseif isInString then
+				isInString = nil
 			else
-				if token.type == "escape" then
-					isEscape = 1
-				else
-					isEscape = 0
-				end
-				args[#args] = args[#args] .. token.data
-				textRanges[#textRanges].stop = len
-				textRanges[#textRanges].start = len - args[#args]:len()
+				isInString = tokenData
+				argMeta.start = argMeta.start or pos
+				argMeta.plain = false
 			end
-		else
-			if token.type == "text" then
-				if isEscape > 0 then
-					args[#args] = args[#args] .. token.data
-					textRanges[#textRanges].stop = len
-					textRanges[#textRanges].start = len - args[#args]:len()
-				else
-					table.insert(args, token.data)
-					table.insert(textRanges, {start = len - token.data:len(), stop = len})
-					last = len
-				end
-			elseif token.type == "quote" then
-				inString = token.data
-				table.insert(args, "")
-				table.insert(textRanges, {start = len, stop = len})
-				last = len
-			elseif token.type == "escape" then
-				isEscape = true
-			elseif token.type == "whitespace" and isEscape == 1 then
-				args[#args] = args[#args] .. token.data
-				textRanges[#textRanges].stop = len
-				textRanges[#textRanges].start = len - args[#args]:len()
-				isEscape = 2
+		elseif token == "esc" then
+			if isEscaped then
+				table.insert(arg, tokenData)
+				argMeta.start = argMeta.start or pos
+				argMeta.plain = false
+			end
+			isEscaped = not isEscaped
+		elseif token == "whitespace" then
+			if isEscaped or isInString then
+				isEscaped = false
+				table.insert(arg, tokenData)
+				argMeta.start = argMeta.start or pos
+				argMeta.plain = false
+			elseif #arg > 0 then
+				argMeta.stop = pos-1
+				table.insert(args, table.concat(arg, ""))
+				table.insert(argsMeta, argMeta)
+				argMeta = {plain=true}
+				arg = {}
 			end
 		end
+		pos = pos + tokenData:len()
 	end
-	return args, textRanges
+	if #arg > 0 then
+		argMeta.stop = pos-1
+		table.insert(args, table.concat(arg, ""))
+		table.insert(argsMeta, argMeta)
+	end
+	return args, argsMeta
 end
 
 local function toArg(string)
@@ -120,14 +117,13 @@ local function toArg(string)
 end
 
 function shell.execute(cmd)
-	local tokens = tokenize(cmd)
-	local args = parseArgs(tokens)
+	local args, argsMeta = parseArgs(cmd)
 	if #args < 1 then
 		return
 	end
 	local progName = args[1]
 	table.remove(args, 1)
-
+	
 	local path = filesystem.path(progName)
 	if not filesystem.isFile(path) then
 		path = util.findScriptPath(progName, "/bin/")
