@@ -240,13 +240,13 @@ function shell.createInteractiveShell()
 		end)
 		self:addHistory(cmd)
 		self.historyOffset = -1
-		s, err, ret = pcall(function()
+		status_code, err, ret = xpcall(function()
 			shell.execute(cmd)
 		end)
-		print(s, err, ret)
-		if not s then
-			print(s, err)
-			shell.writeLine(err)
+		print(status_code, err, ret)
+		if not status_code then
+			print(status_code, err)
+			shell.writeLine(err.message .. "\n" .. err.trace)
 		end
 	end
 

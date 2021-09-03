@@ -1,8 +1,6 @@
 local bufferLib = {}
 
 function bufferLib.create(mode, stream)
-	local thread = require("thread")
-	
 	local buffer = {
 		stream = stream,
 		buffer = "",
@@ -19,10 +17,15 @@ function bufferLib.create(mode, stream)
 	local function readLine(self)
 		local line = ""
 		while self.buffer:len() > 0 or self:readChunk() do
-			startPos = self.buffer:find("\n")
+			local startPos = self.buffer:find("\r\n")
+			local len = 2
+			if not startPos then
+				len = 1
+				startPos = self.buffer:find("\n")
+			end
 			if startPos and self.buffer:len() > 0 then
 				line = line .. self.buffer:sub(1, startPos-1)
-				self.buffer = self.buffer:sub(startPos+1)
+				self.buffer = self.buffer:sub(startPos+len)
 				break
 			else
 				line = line .. self.buffer
@@ -131,6 +134,31 @@ function bufferLib.create(mode, stream)
 	end
 	
 	return buffer
-end 
+end
+
+function bufferLib.stringstream(string)
+	local stringstream = {
+		buffer = string
+	}
+	
+	function stringstream:write(write)
+		self.buffer = self.buffer .. write
+	end
+	
+	function stringstream:read(num)
+		if self.buffer:len() < 1 then
+			return nil
+		end
+		local read = self.buffer:sub(1, num)
+		self.buffer = self.buffer:sub(num+1)
+		return read
+	end
+	
+	function stringstream:seek()
+		return 0
+	end
+	
+	return stringstream
+end
 
 return bufferLib
