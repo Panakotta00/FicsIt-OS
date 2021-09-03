@@ -2,6 +2,7 @@ local shell = require("shell")
 local process = require("process")
 local buffer = require("buffer")
 local json = require("json")
+local packageLib = require("package")
 
 local inet = computer.getPCIDevices(findClass("FINInternetCard"))[1]
 
@@ -52,102 +53,13 @@ local function getPaste(id)
 end
 
 local function requestSource(source, func)
-	if source.type == "inline" then
+	if source.content then
 		func(source.content)
 	elseif source.type == "paste" then
 		requestPaste(source.paste, func)
 	elseif source.type == "url" then
 		requestCode(source.url, func)
 	end
-end
-
-local instructionPattern = "^--FIOS"
-local metaPattern = "^--FIOS%s+(%a+):%s+([%w%p%s]+)%s*$"
-local eventPattern = "^--FIOS%s+event%s+(%a+)%s+(%a+)%s*(.*)%s*$"
-local filePattern = "^--FIOS%s+file%s+\"(.+)\"%s+(.+)%s*$"
-local sourcePattern = "^%s*(%a+)%s*(.*)%s*$"
-
-local function doSource(src)
-	local source = {}
-	local type, data = src:match(sourcePattern)
-	source.type = type
-	if type == "inline" then
-		source.contents = {}
-		return source, source
-	elseif type == "paste" then
-		source.paste = data
-		if not data:find("^%w+$") then
-			error("paste-id is invalid")
-		end
-		return source
-	elseif type == "url" then
-		source.url = data
-		return source
-	end
-end
-
-local function parsePackage(id, packageScript)
-	local stream = buffer.create("r", buffer.stringstream(packageScript))
-	local package = {
-		id = id,
-		meta = {},
-		events = {},
-		files = {}
-	}
-	local item = nil
-	local sources = {}
-	for line in stream:lines() do
-		local instruction = line:find(instructionPattern)
-		if instruction then
-			item = nil
-			local done = false
-			if not done then
-				local key, data = line:match(metaPattern)
-				if key then
-					done = true
-					package.meta[key] = data
-				end
-			end
-			if not done then
-				local step, event, src = line:match(eventPattern)
-				if step then
-					done = true
-					if (step == "pre" or step == "post") and (event == "install" or event == "uninstall" or event == "upgrade") then
-						local source
-						source, item = doSource(src)
-						
-						local eventTbl = package.events[event] or {}
-						package.events[event] = eventTbl
-						
-						local stepTbl = eventTbl[step] or {}
-						eventTbl[step] = stepTbl
-						
-						table.insert(stepTbl, source)
-						table.insert(sources, source)
-					end
-				end
-			end
-			if not done then
-				local file, src = line:match(filePattern)
-				if file then
-					done = true
-					local source
-					source, item = doSource(src)
-					package.files[file] = source
-					table.insert(sources, source)
-				end
-			end
-		elseif item then
-			table.insert(item.contents, line)
-		end
-	end
-	for _, source in pairs(sources) do
-		if source.contents then
-			source.content = table.concat(source.contents, "\n")
-			source.contents = nil
-		end
-	end
-	return package
 end
 
 local function doAllRequests()
@@ -169,61 +81,68 @@ local function doAllRequests()
 	end
 end
 
-local function loadEvents(package)
-	local sources = {}
-	for _, event in pairs(package.events) do
-		for _, step in pairs(event) do
-			for _, item in pairs(step) do
-				requestSource(item, function(data)
-					sources[item] = data
-				end)
-			end
-		end
-	end
-	doAllRequests()
-	return sources
-end
 
 local function savePackage(package)
-	for _, file in pairs(package.files) do
-		if file.type == "inline" then
-			file.content = nil
-		end
-	end
+	local copy = packageLib.convertPackageToSaved(package)
 	filesystem.createDir("/.pastebin")
-	local file = filesystem.open(filesystem.path("/.pastebin", package.id .. ".json"), "w")
-	file:write(json.encode(package))
+	local file = filesystem.open(filesystem.path("/.pastebin", copy.id .. ".json"), "w")
+	file:write(json.encode(copy))
 	file:close()
+end
+
+local function loadEvents(package, event)
+	local function sourceVisitor(source)
+		requestSource(source, function(data)
+			source.content = data
+		end)
+	end
+	
+	packageLib.visitEvents(package, event, "pre", sourceVisitor)
+	packageLib.visitEvents(package, event, "post", sourceVisitor)
+	doAllRequests()
 end
 
 local function install(id)
 	local packageScript = getPaste(id)
-	local package = parsePackage(id, packageScript)
+	local parser = packageLib.createPackageParser(id)
+	parser:parse(packageScript)
+	local package = parser.package
 	
-	local eventSources = loadEvents(package)
-	if package.events.install and package.events.install.pre then
-		for _, e in pairs(package.events.install.pre) do
-			local func = load(eventSources[e])
-			func()
-		end
+	loadEvents(package, "install")
+	local function doSourceVisitor(source)
+		local event = load(source.content)
+		event()
 	end
 	
-	for path, source in pairs(package.files) do
-		requestSource(source, function(data)
-			local file = filesystem.open(path, "w")
+	-- call pre events
+	packageLib.visitEvents(package, "install", "pre", doSourceVisitor)
+	
+	-- do folders
+	table.sort(package.folders, function(f1, f2)
+		return f1.path < f2.path
+	end)
+	for _, folder in pairs(package.folders) do
+		filesystem.createDir(folder.path)
+	end
+	
+	-- do files
+	table.sort(package.files, function(f1, f2)
+		return f1.path < f2.path
+	end)
+	for _, file in pairs(package.files) do
+		print(file.path)
+		requestSource(file, function(data)
+			local file = filesystem.open(file.path, "w")
 			file:write(data)
 			file:close()
 		end)
 	end
 	doAllRequests()
 	
-	if package.events.install and package.events.install.post then
-		for _, e in pairs(package.events.install.post) do
-			local func = load(eventSources[e])
-			func()
-		end
-	end
+	-- call post
+	packageLib.visitEvents(package, "install", "post", doSourceVisitor)
 	
+	-- save package
 	savePackage(package)
 end
 
@@ -232,29 +151,38 @@ local function uninstall(id)
 	if not filesystem.isFile(path) then
 		error("package '" .. id .. "' not yet installed")
 	end
-	local file = buffer.create("r", filesystem.open(path, "r"))
-	local packageData = file:read("a")
-	file:close()
+	local f = buffer.create("r", filesystem.open(path, "r"))
+	local packageData = f:read("a")
+	f:close()
 	local package = json.decode(packageData)
 	
-	local eventSources = loadEvents(package)
-	if package.events.uninstall and package.events.uninstall.pre then
-		for _, e in pairs(package.events.uninstall.pre) do
-			local func = load(eventSources[e])
-			func()
-		end
+	loadEvents(package, "uninstall")
+	local function doSourceVisitor(source)
+		local event = load(source.content)
+		event()
 	end
 	
-	for path in pairs(package.files) do
-		filesystem.remove(path)
+	-- call pre events
+	packageLib.visitEvents(package, "uninstall", "pre", doSourceVisitor)
+	
+	-- remove files
+	table.sort(package.files, function(f1, f2)
+		return f1.path > f2.path
+	end)
+	for _, file in pairs(package.files) do
+		filesystem.remove(file.path)
 	end
 	
-	if package.events.uninstall and package.events.uninstall.post then
-		for _, e in pairs(package.events.uninstall.post) do
-			local func = load(eventSources[e])
-			func()
-		end
+	-- remove folder
+	table.sort(package.folders, function(f1, f2)
+		return f1.path > f2.path
+	end)
+	for _, folder in pairs(package.folders) do
+		filesystem.remove(folder.path)
 	end
+	
+	-- call post events
+	packageLib.visitEvents(package, "uninstall", "post", doSourceVisitor)
 end
 
 local args = {...}

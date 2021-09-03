@@ -54,4 +54,15 @@ function util.isArgumentFlag(arg)
 	return arg:sub(1, 1) == "-"
 end
 
+function util.deepCopy(table)
+	local newTable = {}
+	for k, v in pairs(table) do
+		if type(v) == "table" then
+			v = util.deepCopy(v)
+		end
+		newTable[k] = v
+	end
+	return newTable
+end
+
 return util
