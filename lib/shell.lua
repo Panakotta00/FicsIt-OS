@@ -35,81 +35,280 @@ function shell.getOutput()
 	return p.stdOutput
 end
 
-local function nextToken(str)
-	local pos = str:find("[%s\"'\\]")
-	if not pos then
-		return "", "text", str
+function shell.createLexer()
+	local lexer = {
+		tokenTypes = {},
+		tokenData = {},
+		tokenStart = {},
+		tokenStop = {},
+		len = 0
+	}
+	
+	function lexer:nextToken(str)
+		local pos = str:find("[%s+\"'\\<>]")
+		if not pos then
+			return "", "text", str
+		end
+		if pos > 1 then
+			return str:sub(pos), "text", str:sub(1, pos-1)
+		end
+		local c = str:sub(1,1)
+		if c == "\"" or c == "'" then
+			return str:sub(pos+1), "quote", c
+		end
+		if c == "\\" then
+			return str:sub(pos+1), "esc", c
+		end
+		if c == "=" then
+			return str:sub(pos+1), "set", c
+		end
+		if c == "<" or c == ">" then
+			return str:sub(pos+1), c, c
+		end
+		return str:sub(pos+1), "whitespace", c
 	end
-	if pos > 1 then
-		return str:sub(pos), "text", str:sub(1, pos-1)
+	
+	function lexer:tokenize(txt)
+		local tokenType, tokenData
+		while txt:len() > 0 do
+			txt, tokenType, tokenData = self:nextToken(txt)
+			table.insert(self.tokenTypes, tokenType)
+			table.insert(self.tokenData, tokenData)
+			table.insert(self.tokenStart, self.len+1)
+			table.insert(self.tokenStop, self.len + tokenData:len())
+			self.len = self.len + tokenData:len()
+		end
 	end
-	local c = str:sub(1,1)
-	if c == "\"" or c == "'" then
-		return str:sub(pos+1), "quote", c
+	
+	function lexer:getToken(pos)
+		return self.tokenTypes[pos], self.tokenData[pos], self.tokenStart[pos], self.tokenStop[pos]
 	end
-	if c == "\\" then
-		return str:sub(pos+1), "esc", c
-	end
-	return str:sub(pos+1), "whitespace", c
+	
+	return lexer
 end
 
-local function parseArgs(inst)
-	local args = {}
-	local argsMeta = {}
-	local arg = {}
-	local argMeta = {plain=true}
-	local isInString = nil
-	local isEscaped = false
+function shell.replaceVars(str, vars)
+	vars = vars or process.running().environment
+	local function replaceVar(var)
+		return vars[var] or ""
+	end
+	str = str:gsub("$(%w+)", replaceVar)
+	str = str:gsub("${(%w+)}", replaceVar)
+	return str
+end
+
+function shell.createParser(lexer)
+	local parser = {
+		lexer = lexer,
+		pos = 1,
+	}
 	
-	local pos = 1
-	while inst:len() > 0 do
-		local token, tokenData
-		inst, token, tokenData = nextToken(inst)
-		if token == "text" then
-			table.insert(arg, tokenData)
-			argMeta.start = argMeta.start or pos
-		elseif token == "quote" then
-			if isEscaped or (isInString and isInString ~= tokenData) then
-				table.insert(arg, tokenData)
-				argMeta.start = argMeta.start or pos
-				argMeta.plain = false
-				isEscaped = false
-			elseif isInString then
-				isInString = nil
+	function parser:getToken(pos)
+		return self.lexer:getToken(pos or self.pos)
+	end
+	
+	function parser:nextToken()
+		self.pos = self.pos + 1
+	end
+	
+	function parser:nextNonWhitespaceToken()
+		while true do
+			local tokenType = self:getToken()
+			if tokenType ~= "whitespace" then
+				break
 			else
-				isInString = tokenData
-				argMeta.start = argMeta.start or pos
-				argMeta.plain = false
-			end
-		elseif token == "esc" then
-			if isEscaped then
-				table.insert(arg, tokenData)
-				argMeta.start = argMeta.start or pos
-				argMeta.plain = false
-			end
-			isEscaped = not isEscaped
-		elseif token == "whitespace" then
-			if isEscaped or isInString then
-				isEscaped = false
-				table.insert(arg, tokenData)
-				argMeta.start = argMeta.start or pos
-				argMeta.plain = false
-			elseif #arg > 0 then
-				argMeta.stop = pos-1
-				table.insert(args, table.concat(arg, ""))
-				table.insert(argsMeta, argMeta)
-				argMeta = {plain=true}
-				arg = {}
+				self:nextToken()
 			end
 		end
-		pos = pos + tokenData:len()
+		return self:getToken()
 	end
-	if #arg > 0 then
-		argMeta.stop = pos-1
-		table.insert(args, table.concat(arg, ""))
-		table.insert(argsMeta, argMeta)
+	
+	function parser:parseToken()
+		local text = {}
+		local state = "normal"
+		local isEscaped = false
+		while true do
+			local tokenType, tokenData, tokenStart, tokenStop = self:getToken()
+			text.start = text.start or tokenStart
+			if state == "normal" then
+				if tokenType == "text" then
+					table.insert(text, tokenData)
+				elseif tokenType == "quote" then
+					state = tokenData
+				elseif tokenType == "esc" then
+					state = tokenType
+				elseif tokenType == "whitespace" and #text < 1 then
+					-- ignore whitespace at beginning
+					text.start = nil
+				else
+					break
+				end
+			elseif state == "'" or state == "\"" then
+				if tokenData == state then
+					if isEscaped then
+						text[#text] = tokenData
+						isEscaped = false
+					else
+						state = "normal"
+					end
+				elseif tokenType == "text" or tokenType == "quote" or tokenType == "whitespace" then
+					table.insert(text, tokenData)
+					isEscaped = false
+				elseif tokenType == "esc" then
+					if isEscaped then
+						isEscaped = false
+					else
+						table.insert(text, tokenData)
+						isEscaped = true
+					end
+				else
+					break
+				end
+			elseif state == "esc" then
+				if tokenType == "text" or tokenType == "quote" or tokenType == "esc" or tokenType == "whitespace" then
+					table.insert(text, tokenData)
+					state = "normal"
+				else
+					break
+				end
+			else
+				break
+			end
+			text.stop = tokenStop
+			self:nextToken()
+		end
+		
+		if #text > 0 then
+			return shell.replaceVars(table.concat(text, ""), self.environment), text.start, text.stop
+		else
+			return nil
+		end
 	end
-	return args, argsMeta
+	
+	function parser:parseSimple()
+		local simple = {}
+		while true do
+			local token = self:parseToken()
+			if token then
+				table.insert(simple, token)
+			else
+				break
+			end
+		end
+		if #simple > 0 then
+			return simple
+		else
+			return nil
+		end
+	end
+	
+	function parser:parseCommand()
+		local command = {
+			args = {}
+		}
+		while true do
+			local simple = self:parseSimple()
+			if simple then
+				table.move(simple, 1, #simple, #command.args+1, command.args)
+			else
+				local tokenType, tokenData = self:nextNonWhitespaceToken()
+				local action
+				if tokenType == ">" then
+					action = function(token)
+						command.outputFile = token
+					end
+				elseif tokenType == "<" then
+					action = function(token)
+						command.inputFile = token
+					end
+				else
+					break
+				end
+				if action then
+					self:nextToken()
+					local token = self:parseToken()
+					if token then
+						action(token)
+					else
+						break
+					end
+				end
+			end
+		end
+		if #command.args > 0 then
+			return command
+		else
+			return nil
+		end
+	end
+	
+	function parser:parseArgs(inst)
+		local arg = {}
+		local argMeta = {plain=true}
+		local isInString = nil
+		local isEscaped = false
+		
+		local pos = 1
+		while inst:len() > 0 do
+			local token, tokenData
+			inst, token, tokenData = nextToken(inst)
+			if token == "text" then
+				table.insert(arg, tokenData)
+				argMeta.start = argMeta.start or pos
+			elseif token == "quote" then
+				if isEscaped or (isInString and isInString ~= tokenData) then
+					table.insert(arg, tokenData)
+					argMeta.start = argMeta.start or pos
+					argMeta.plain = false
+					isEscaped = false
+				elseif isInString then
+					isInString = nil
+				else
+					isInString = tokenData
+					argMeta.start = argMeta.start or pos
+					argMeta.plain = false
+				end
+			elseif token == "esc" then
+				if isEscaped then
+					table.insert(arg, tokenData)
+					argMeta.start = argMeta.start or pos
+					argMeta.plain = false
+				end
+				isEscaped = not isEscaped
+			elseif token == "var" then
+				if isEscaped then
+					table.insert(arg, tokenData)
+					argMeta.plain = false
+					argMeta.start = argMeta.start or pos
+				else
+					table.insert(arg, tokenData)
+					argMeta.var = true
+				end
+			elseif token == "whitespace" then
+				if isEscaped or isInString then
+					isEscaped = false
+					table.insert(arg, tokenData)
+					argMeta.start = argMeta.start or pos
+					argMeta.plain = false
+				elseif #arg > 0 then
+					argMeta.stop = pos-1
+					table.insert(args, table.concat(arg, ""))
+					table.insert(argsMeta, argMeta)
+					argMeta = {plain=true}
+					arg = {}
+				end
+			end
+			pos = pos + tokenData:len()
+		end
+		if #arg > 0 then
+			argMeta.stop = pos-1
+			table.insert(args, table.concat(arg, ""))
+			table.insert(argsMeta, argMeta)
+		end
+		return args, argsMeta
+	end
+	
+	return parser
 end
 
 local function toArg(string)
@@ -117,31 +316,15 @@ local function toArg(string)
 end
 
 function shell.execute(cmd)
-	local args, argsMeta = parseArgs(cmd)
-	if #args < 1 then
-		return
-	end
+	local lexer = shell.createLexer()
+	lexer:tokenize(cmd)
+	local parser = shell.createParser(lexer)
 	
-	-- parse file I/O
-	local outputFile
-	local i = 1
-	while i <= #args do
-		if argsMeta[i].plain then
-			if args[i] == ">" then
-				outputFile = args[i+1]
-				table.remove(args, i)
-				table.remove(argsMeta, i)
-				table.remove(args, i)
-				table.remove(argsMeta, i)
-				i = i - 1
-			end
-		end
-		i = i + 1
-	end
+	local command = parser:parseCommand()
 	
 	-- load prog
-	local progName = args[1]
-	table.remove(args, 1)
+	local progName = command.args[1]
+	table.remove(command.args, 1)
 	
 	local path = filesystem.path(progName)
 	if not filesystem.isFile(path) then
@@ -158,132 +341,69 @@ function shell.execute(cmd)
 	end
 	
 	-- create process
-	local output
+	local output, input
 	local proc = process.create(function(...)
-		if outputFile then
-			output = filesystem.open(outputFile, "w")
+		if command.outputFile then
+			output = filesystem.open(command.outputFile, "w")
 			process.running().stdOutput = output
 		end
+		if command.inputFile then
+			input = filesystem.open(command.inputFile, "r")
+			process.running().stdInput = input
+		end
 		return prog(...)
-	end, table.unpack(args))
+	end, table.unpack(command.args))
 	proc:await()
 	if output then
 		output:close()
 	end
+	if input then
+		input:close()
+	end
 	return table.unpack(proc.mainThread.results)
 end
 
-function shell.createInteractiveShell()
-	local obj = {
-		historyOffset = -1,
-		maxHistoryOffset = 0,
-	}
-
-	function obj:getHistoryPath()
-		return process.running().environment["shell_history"] or "/.shell_history"
-	end
-
-	function obj:getHistory(offset)
-		offset = offset or self.historyOffset
-		if not filesystem.isFile(self:getHistoryPath()) then
-			return ""
-		end
-		local file = buffer.create("r", filesystem.open(self:getHistoryPath(), "r"))
-		local history = {}
-		for line in file:lines() do
-			table.insert(history, line)
-		end
-		file:close()
-		self.maxHistoryOffset = #history - 1
-		return history[#history - offset] or ""
-	end
-
-	function obj:addHistory(cmd)
-		local o_cmd = self:getHistory(0)
-		if o_cmd == cmd then
-			return
-		end
-		local file = filesystem.open(self:getHistoryPath(), "a")
-		file:write(cmd .. "\n")
-		file:close()
-		self.maxHistoryOffset = self.maxHistoryOffset + 1
-	end
+function shell.completions(text, withCommands)
+	local completions = {}
 	
-	function obj:tick()
-		shell.write(process.running().environment["PWD"] .. " > ")
-		local tabIndex = 0
-		local prevTab = nil
-		local prevPath = nil
-		local tabsProgs = false
-		local cmd = console.readLine(shell.getInput(), shell.getOutput(), function(arg, text, off, token, data)
-			if arg == 0 then
-				if token == "text" then
-					if data == "\t" then
-						tabIndex = tabIndex + 1
-						local args, argsMeta = parseArgs(text)
-						local arg = args[#args] or ""
-						local path = prevPath or arg:match(".*/") or ""
-						local name = prevTab or arg:match("[^/]*$")
-						prevTab = name
-						prevPath = path
-						local f_path = filesystem.path(process.running().environment["PWD"], path)
-						if #args < 1 or (#args == 1 and path:len() < 1)or tabsProgs then
-							tabsProgs = true
-							path = ""
-							f_path = "/bin/"
-						end
-						local i = 0
-						local children = {}
-						print(f_path)
-						if filesystem.isDir(f_path) then
-							children = filesystem.childs(f_path)
-						end
-						table.sort(children)
-						for _, child in pairs(children) do
-							local m1, m2 = child:match("^(" .. name .. ")(.*)$")
-							if m1 then
-								i = i + 1
-								if tabIndex == i then
-									if tabsProgs then
-										child = filesystem.path(4, child)
-									end
-									return false, true, text:sub(1, (argsMeta[#argsMeta] or {}).start-1 or 0) .. toArg(path .. child), 0
-								end
-							end
-						end
-						tabIndex = 0
-						return false, true, text:sub(1, (argsMeta[#argsMeta] or {}).start-1 or 0) .. toArg(path .. name), 0
-					end
+	local name = text
+	local body = ""
+	if text:find("/") then
+		withCommands = false
+	end
+	if text:find("/%w+%s*$") then
+		name = filesystem.path(3, text)
+		body = filesystem.path(0, text, "..")
+	elseif text:find("/%s*$") then
+		name = ""
+		body = text
+	end
+	-- TODO: add "directory"-ref detection for filesystem.analyze and path, and add maybe something to path to be able to get all parts at once
+	
+	local function addChildren(path, removeEnding)
+		local children = {}
+		if filesystem.isDir(path) then
+			children = filesystem.childs(path)
+		end
+		table.sort(children)
+		for _, child in pairs(children) do
+			local m1, m2 = child:match("^(" .. name .. ")(.*)$")
+			if m1 then
+				local completion = text .. m2
+				if removeEnding then
+					completion = filesystem.path(0, filesystem.path(completion, ".."), filesystem.path(4, completion))
 				end
-				prevTab = nil
-				prevPath = nil
-				tabsProgs = false
-				tabIndex = 0
-				if token == "csi" then
-					if data.c == "A" then
-						self.historyOffset = math.min(self.maxHistoryOffset, self.historyOffset + 1)
-						return false, true, self:getHistory(), 0
-					elseif data.c == "B" then
-						self.historyOffset = math.max(0, self.historyOffset - 1)
-						return false, true, self:getHistory(), 0
-					end
-				end
+				table.insert(completions, completion)
 			end
-			return true, false, text, off
-		end)
-		self:addHistory(cmd)
-		self.historyOffset = -1
-		status_code, err, ret = (xpcall or pcall)(function()
-			shell.execute(cmd)
-		end)
-		if not status_code then
-			shell.writeLine(err.message .. "\n" .. (err.trace or ""))
 		end
 	end
 
-	obj:getHistory()
+	if withCommands then
+		addChildren("/bin/", true)
+	end
+	addChildren(filesystem.path(process.running().environment["PWD"], body))
 	
-	return obj
+	return completions
 end
 
 return shell

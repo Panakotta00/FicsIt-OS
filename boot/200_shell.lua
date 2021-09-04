@@ -3,12 +3,7 @@ local shell  = require("shell")
 local process = require("process")
 
 shell.getInput().isTTY = true
-local prog = process.create(function()
-	local ishell = shell.createInteractiveShell()
-	while true do
-		ishell:tick()
-	end
-end)
+local prog = process.create(filesystem.loadFile("/bin/shell.lua"))
 
 process.createPipe(prog, terminal)
 process.createPipe(terminal, prog)

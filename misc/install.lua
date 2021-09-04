@@ -49,25 +49,27 @@ end
 local tree = {
 	"/",
 	{
+		"bin",
+		{"cat.lua"},
+		{"cd.lua"},
+		{"clear.lua"},
+		{"echo.lua"},
+		{"edit.lua"},
+		{"ls.lua"},
+		{"mkdir.lua"},
+		{"pastebin.lua"},
+		{"rm.lua"},
+		{"shell.lua"},
+		{"touch.lua"},
+	},
+	{
 		"boot",
 		{"10_core.lua"},
 		{"50_gpu.lua"},
 		{"100_term.lua"},
 		{"120_gui.lua"},
 		{"200_shell.lua"},
-		{"run.lua"}
-	},
-	{
-		"bin",
-		{"cat.lua"},
-		{"cd.lua"},
-		{"clear.lua"},
-		{"edit.lua"},
-		{"ls.lua"},
-		{"mkdir.lua"},
-		{"pastebin.lua"},
-		{"rm.lua"},
-		{"touch.lua"}
+		{"run.lua"},
 	},
 	{
 		"lib",
@@ -83,7 +85,7 @@ local tree = {
 		{"shell.lua"},
 		{"term.lua"},
 		{"thread.lua"},
-		{"util.lua"}
+		{"util.lua"},
 	}
 }
 

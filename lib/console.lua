@@ -131,8 +131,10 @@ function console.readLine(input, output, extensionFunc)
 				output:write("\x1B[25l")
 				return inputText
 			elseif token == "backspace" then
-				inputText = inputText:sub(1, inputText:len()-cursorOffset-1) .. inputText:sub(inputText:len()-cursorOffset+1)
-				update = true
+				if cursorOffset < #inputText then
+					inputText = inputText:sub(1, inputText:len()-cursorOffset-1) .. inputText:sub(inputText:len()-cursorOffset+1)
+					update = true
+				end
 			elseif token == "csi" then
 				if tokendata.c == "S" or tokendata.c == "T" then
 					output:write(tokendata.t)
