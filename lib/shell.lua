@@ -121,6 +121,25 @@ function shell.execute(cmd)
 	if #args < 1 then
 		return
 	end
+	
+	-- parse file I/O
+	local outputFile
+	local i = 1
+	while i <= #args do
+		if argsMeta[i].plain then
+			if args[i] == ">" then
+				outputFile = args[i+1]
+				table.remove(args, i)
+				table.remove(argsMeta, i)
+				table.remove(args, i)
+				table.remove(argsMeta, i)
+				i = i - 1
+			end
+		end
+		i = i + 1
+	end
+	
+	-- load prog
 	local progName = args[1]
 	table.remove(args, 1)
 	
@@ -137,7 +156,21 @@ function shell.execute(cmd)
 		shell.writeLine("Unable to load program\n" .. prog)
 		return -2
 	end
-	return prog(table.unpack(args))
+	
+	-- create process
+	local output
+	local proc = process.create(function(...)
+		if outputFile then
+			output = filesystem.open(outputFile, "w")
+			process.running().stdOutput = output
+		end
+		return prog(...)
+	end, table.unpack(args))
+	proc:await()
+	if output then
+		output:close()
+	end
+	return table.unpack(proc.mainThread.results)
 end
 
 function shell.createInteractiveShell()
@@ -187,7 +220,7 @@ function shell.createInteractiveShell()
 				if token == "text" then
 					if data == "\t" then
 						tabIndex = tabIndex + 1
-						local args, ranges = parseArgs(tokenize(text))
+						local args, argsMeta = parseArgs(text)
 						local arg = args[#args] or ""
 						local path = prevPath or arg:match(".*/") or ""
 						local name = prevTab or arg:match("[^/]*$")
@@ -200,7 +233,11 @@ function shell.createInteractiveShell()
 							f_path = "/bin/"
 						end
 						local i = 0
-						local children = filesystem.childs(f_path)
+						local children = {}
+						print(f_path)
+						if filesystem.isDir(f_path) then
+							children = filesystem.childs(f_path)
+						end
 						table.sort(children)
 						for _, child in pairs(children) do
 							local m1, m2 = child:match("^(" .. name .. ")(.*)$")
@@ -210,12 +247,12 @@ function shell.createInteractiveShell()
 									if tabsProgs then
 										child = filesystem.path(4, child)
 									end
-									return false, true, text:sub(1, (ranges[#ranges] or {}).start or 0) .. toArg(path .. child), 0
+									return false, true, text:sub(1, (argsMeta[#argsMeta] or {}).start-1 or 0) .. toArg(path .. child), 0
 								end
 							end
 						end
 						tabIndex = 0
-						return false, true, text:sub(1, (ranges[#ranges] or {}).start or 0) .. toArg(path .. name), 0
+						return false, true, text:sub(1, (argsMeta[#argsMeta] or {}).start-1 or 0) .. toArg(path .. name), 0
 					end
 				end
 				prevTab = nil
@@ -239,9 +276,7 @@ function shell.createInteractiveShell()
 		status_code, err, ret = (xpcall or pcall)(function()
 			shell.execute(cmd)
 		end)
-		print(status_code, err, ret)
 		if not status_code then
-			print(status_code, err)
 			shell.writeLine(err.message .. "\n" .. (err.trace or ""))
 		end
 	end

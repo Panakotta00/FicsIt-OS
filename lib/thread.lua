@@ -17,7 +17,7 @@ function threadLib.running(co)
 	return running
 end
 
-function threadLib.create(func)
+function threadLib.create(func, ...)
 	local thread
 	if type(func) == "thread" then
 		if _thread.threads[func] then
@@ -29,7 +29,8 @@ function threadLib.create(func)
 		}
 	else
 		thread = {
-			co = coroutine.create(func)
+			co = coroutine.create(func),
+			params = {...}
 		}
 	end
 
@@ -41,6 +42,10 @@ function threadLib.create(func)
 		table.remove(_thread.threads, _thread.threads[self])
 		_thread.threads[self] = nil
 		_thread.threads[self.co] = nil
+	end
+	
+	function thread:status()
+		return coroutine.status(self.co)
 	end
 
 	table.insert(_thread.threads, thread)
@@ -58,9 +63,11 @@ function threadLib.tick()
 		_thread.current = _thread.current + 1
 		local tickThread = _thread.threads[_thread.current]
 		if not tickThread.ignore then
-			success, e = coroutine.resume(true, tickThread.co)
+			local results = {coroutine.resume(true, tickThread.co, table.unpack(tickThread.params))}
+			local success, e = results[1], results[2]
 			if coroutine.status(tickThread.co) == "dead" then
 				if not success then
+					results[1] = -1
 					local shell = require("shell")
 					shell.write("Thread crashed!")
 					shell.write(e)
@@ -68,7 +75,13 @@ function threadLib.tick()
 					print("Thread crashed!")
 					print(e)
 					print(debug.traceback(tickThread.co))
+				else
+					table.remove(results, 1)
+					if #results < 1 then
+						results[1] = 0
+					end
 				end
+				tickThread.results = results
 				tickThread:stop()
 			elseif not success then
 				runWithoutLimit = false

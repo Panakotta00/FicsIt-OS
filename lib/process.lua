@@ -47,7 +47,7 @@ function process.createEnvironment(process)
 	process.environment = environment
 end
 
-function process.create(func)
+function process.create(func, ...)
 	local p, index
 	if type(func) == "thread" then
 		index = _process.processes[func]
@@ -55,11 +55,11 @@ function process.create(func)
 			return _process.processes[index]
 		end
 		p = {
-			mainThread = thread.create(func)
+			mainThread = thread.create(func, ...)
 		}
 	else
 		p = {
-			mainThread = thread.create(func)
+			mainThread = thread.create(func, ...)
 		}
 	end
 	
@@ -78,6 +78,18 @@ function process.create(func)
 
 	table.insert(_process.processes, p)
 	_process.processes[p.mainThread.co] = #_process.processes
+	
+	function p:isRunning()
+		local status = self.mainThread:status()
+		--print(status)
+		return status == "suspended" or status == "running"
+	end
+	
+	function p:await()
+		while self:isRunning() do
+			coroutine.yield()
+		end
+	end
 
 	return p
 end
