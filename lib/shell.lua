@@ -315,6 +315,61 @@ local function toArg(string)
 	return string:gsub(" ", "\\ ")
 end
 
+local builtInCommands = {}
+
+function builtInCommands.cd(...)
+	local p = process.running()
+	
+	p.environment["PWD"] = filesystem.path(1, p.environment["PWD"], ...)
+end
+
+function shell.executeCommand(command)
+	-- load prog
+	local progName = command.args[1]
+	table.remove(command.args, 1)
+	
+	local prog = builtInCommands[progName]
+	if prog then
+		return prog(table.unpack(command.args))
+	else
+		local path = filesystem.path(progName)
+		if not filesystem.isFile(path) then
+			path = util.findScriptPath(progName, "/bin/")
+			if not path then
+				shell.writeLine("Command not found")
+				return -1
+			end
+		end
+		local prog = filesystem.loadFile(path)
+		if type(prog) ~= "function" then
+			shell.writeLine("Unable to load program\n" .. prog)
+			return -2
+		end
+		
+		-- create process
+		local output, input
+		local proc = process.create(function(...)
+			if command.outputFile then
+				output = filesystem.open(command.outputFile, "w")
+				process.running().stdOutput = output
+			end
+			if command.inputFile then
+				input = filesystem.open(command.inputFile, "r")
+				process.running().stdInput = input
+			end
+			return prog(...)
+		end, table.unpack(command.args))
+		proc:await()
+		if output then
+			output:close()
+		end
+		if input then
+			input:close()
+		end
+		return table.unpack(proc.mainThread.results)
+	end
+end
+
 function shell.execute(cmd)
 	local lexer = shell.createLexer()
 	lexer:tokenize(cmd)
@@ -322,45 +377,7 @@ function shell.execute(cmd)
 	
 	local command = parser:parseCommand()
 	
-	-- load prog
-	local progName = command.args[1]
-	table.remove(command.args, 1)
-	
-	local path = filesystem.path(progName)
-	if not filesystem.isFile(path) then
-		path = util.findScriptPath(progName, "/bin/")
-		if not path then
-			shell.writeLine("Command not found")
-			return -1
-		end
-	end
-	local prog = filesystem.loadFile(path)
-	if type(prog) ~= "function" then
-		shell.writeLine("Unable to load program\n" .. prog)
-		return -2
-	end
-	
-	-- create process
-	local output, input
-	local proc = process.create(function(...)
-		if command.outputFile then
-			output = filesystem.open(command.outputFile, "w")
-			process.running().stdOutput = output
-		end
-		if command.inputFile then
-			input = filesystem.open(command.inputFile, "r")
-			process.running().stdInput = input
-		end
-		return prog(...)
-	end, table.unpack(command.args))
-	proc:await()
-	if output then
-		output:close()
-	end
-	if input then
-		input:close()
-	end
-	return table.unpack(proc.mainThread.results)
+	return shell.executeCommand(command)
 end
 
 function shell.completions(text, withCommands)
@@ -402,7 +419,6 @@ function shell.completions(text, withCommands)
 		addChildren("/bin/", true)
 	end
 	addChildren(filesystem.path(process.running().environment["PWD"], body))
-	
 	return completions
 end
 

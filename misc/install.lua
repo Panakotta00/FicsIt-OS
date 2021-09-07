@@ -51,7 +51,6 @@ local tree = {
 	{
 		"bin",
 		{"cat.lua"},
-		{"cd.lua"},
 		{"clear.lua"},
 		{"echo.lua"},
 		{"edit.lua"},

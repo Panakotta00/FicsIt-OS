@@ -1,5 +1,6 @@
 local thread = require("thread")
 local buffer = require("buffer")
+local util = require("util")
 
 _process = {
 	processes = {}
@@ -70,6 +71,7 @@ function process.create(func, ...)
 	if p.parent then
 		p.stdInput = p.parent.stdInput
 		p.stdOutput = p.parent.stdOutput
+		p.environment = util.deepCopy(p.environment)
 	else
 		local stream = process.serialStream()
 		p.stdInput = buffer.create("r", stream)

@@ -26,6 +26,7 @@ function threadLib.create(func, ...)
 		thread = {
 			co = func,
 			ignore = true,
+			params = {...}
 		}
 	else
 		thread = {
