@@ -43,10 +43,11 @@ function threadLib.create(func, ...)
 		table.remove(_thread.threads, _thread.threads[self])
 		_thread.threads[self] = nil
 		_thread.threads[self.co] = nil
+		self.results = {}
 	end
 	
 	function thread:status()
-		return coroutine.status(self.co)
+		return _thread.threads[self] and coroutine.status(self.co)
 	end
 
 	table.insert(_thread.threads, thread)

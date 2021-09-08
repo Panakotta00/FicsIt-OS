@@ -86,6 +86,7 @@ function term.createTTY(input, output)
 		buffer = "",
 		input = input or require("shell").getInput(),
 		output = output or require("shell").getOutput(),
+		process = require("process").running(),
 		alternative = {
 			cachedLines = {""},
 			cursorPosX = 1,

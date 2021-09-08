@@ -275,7 +275,7 @@ draw()
 
 while true do
 	if inputBuffer:len() == 0 then
-		inputBuffer = shell.read()
+		inputBuffer = shell.read(512)
 	end
 	if inputBuffer:len() > 0 then
 		inputBuffer, token, tokendata = term.nextToken(inputBuffer)

@@ -3,10 +3,13 @@ local buffer = require("buffer")
 local util = require("util")
 
 _process = {
-	processes = {}
+	processes = {},
+	processIDs = {},
 }
 
 local process = {}
+
+process.SIGINT = 0
 
 function process.serialStream()
 	local stream = {
@@ -32,6 +35,10 @@ function process.serialStream()
 	function stream:seek() end
 	
 	return stream
+end
+
+function process.generatePID()
+	return (_process.processIDs[#_process.processIDs] or 0) + 1
 end
 
 function process.createEnvironment(process)
@@ -65,6 +72,10 @@ function process.create(func, ...)
 	end
 	
 	p.parent = process.running()
+	p.signalHandlers = {}
+	p.signalHandlers[process.SIGINT] = function(proc)
+		proc:kill()
+	end
 
 	process.createEnvironment(p)
 	
@@ -83,13 +94,25 @@ function process.create(func, ...)
 	
 	function p:isRunning()
 		local status = self.mainThread:status()
-		--print(status)
 		return status == "suspended" or status == "running"
 	end
 	
 	function p:await()
 		while self:isRunning() do
 			coroutine.yield()
+		end
+	end
+	
+	function p:kill()
+		p.mainThread:stop()
+		table.remove(_process.processes, _process.processes[p.mainThread.co])
+		_process.processes[p.mainThread.co] = nil
+	end
+	
+	function p:triggerSignal(signal)
+		local handler = self.signalHandlers[signal]
+		if handler then
+			handler(self)
 		end
 	end
 
@@ -137,9 +160,21 @@ end
 function process.createPipe(from, to)
 	local stream = createPipeStream()
 	stream.isTTY = to.stdInput.isTTY
-	from.stdOutput = buffer.create("w", stream)
-	to.stdInput = buffer.create("r", stream)
+	from.stdOutput = stream
+	to.stdInput = stream
 	from.stdOutput.mutex = to.stdInput.mutex
+end
+
+function process.getProcesses()
+	local ids = {}
+	for id in pairs(_process.processIDs) do
+		table.insert(ids, id)
+	end
+	return ids
+end
+
+function process.getProcessByID(pid)
+	return _process.processes[_process.processIDs[pid]]
 end
 
 return process

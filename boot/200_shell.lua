@@ -17,6 +17,7 @@ while true do
 	end
 	computer.skip()
 	if console then
+		console.process = prog
 		console:handleInput(event.pull(timeout))
 	end
 end

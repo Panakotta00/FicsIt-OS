@@ -36,6 +36,8 @@ local function addHistory(cmd)
 	maxHistoryOffset = maxHistoryOffset + 1
 end
 
+process.running().signalHandlers[process.SIGINT] = function(p) end
+
 while true do
 	shell.write(process.running().environment["PWD"] .. " > ")
 	local tabIndex = 0

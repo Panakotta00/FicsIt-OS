@@ -1,4 +1,5 @@
 local term = require("term")
+local process = require("process")
 
 _console = {
 	current = nil
@@ -18,12 +19,13 @@ function console.createConsole()
 	local obj = term.createTTY()
 
 	function obj:tick()
-		local str = self.input:read()
+		local str = self.input:read(512)
 		self:write(str)
 	end
 
 	function obj:handleInput(e, s, c, b, m)
 		if e == "OnKeyDown" then
+			print(e, s, c, b, m)
 			local text = self.inputText
 			if b == 35 then
 				-- end
@@ -52,6 +54,8 @@ function console.createConsole()
 				end
 			elseif b == 46 then
 				-- del
+			elseif b == 84 and m & 4 > 0 then
+				self.process:triggerSignal(process.SIGINT)
 			end
 			--print("key:", b)
 			--print(string.byte(c))
@@ -80,7 +84,7 @@ function console.readTillCPR(stream, text)
 	local token, tokendata
 	while true do
 		if text:len() == 0 then
-			text = text .. stream:read()
+			text = text .. stream:read(512)
 		end
 		if text:len() > 0 then
 			text, token, tokendata = term.nextToken(text)
@@ -112,7 +116,7 @@ function console.readLine(input, output, extensionFunc)
 	local finish
 	while true do
 		if buffer:len() == 0 then
-			buffer = input:read()
+			buffer = input:read(512)
 		end
 		if buffer:len() > 0 then
 			buffer, token, tokendata = term.nextToken(buffer)

@@ -359,7 +359,13 @@ function shell.executeCommand(command)
 			end
 			return prog(...)
 		end, table.unpack(command.args))
+		local oldHandler = process.running().signalHandlers[process.SIGINT]
+		process.running().signalHandlers[process.SIGINT] = function(p)
+			proc.stdOutput:write("terminated!\n")
+			proc:kill()
+		end
 		proc:await()
+		process.running().signalHandlers[process.SIGINT] = oldHandler
 		if output then
 			output:close()
 		end
@@ -388,14 +394,13 @@ function shell.completions(text, withCommands)
 	if text:find("/") then
 		withCommands = false
 	end
-	if text:find("/%w+%s*$") then
-		name = filesystem.path(3, text)
-		body = filesystem.path(0, text, "..")
-	elseif text:find("/%s*$") then
+	if filesystem.analyzePath(text) & 32 > 0 then
 		name = ""
 		body = text
+	else
+		name = filesystem.path(3, text)
+		body = filesystem.path(0, text, "..")
 	end
-	-- TODO: add "directory"-ref detection for filesystem.analyze and path, and add maybe something to path to be able to get all parts at once
 	
 	local function addChildren(path, removeEnding)
 		local children = {}
