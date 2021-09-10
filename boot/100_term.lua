@@ -11,6 +11,7 @@ terminal = process.create(function()
 		console:paint(consoleBuffer)
 		gpu:setBuffer(consoleBuffer)
 		gpu:flush()
+		computer.skip()
 		coroutine.yield()
 		computer.skip()
 	end

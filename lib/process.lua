@@ -55,6 +55,38 @@ function process.createEnvironment(process)
 	process.environment = environment
 end
 
+---@class Process
+process.Process = {}
+
+---@return boolean true if the process is currently processing/running
+function process.Process:isRunning()
+	local status = self.mainThread:status()
+	return status == "suspended" or status == "running"
+end
+
+---blocks the callee thread till the process finished processing and returned or failed
+function process.Process:await()
+	while self:isRunning() do
+		coroutine.yield()
+	end
+end
+
+---kills the process, causes it return or force exit
+function process.Process:kill()
+	self.mainThread:stop()
+	table.remove(_process.processes, _process.processes[self.mainThread.co])
+	_process.processes[self.mainThread.co] = nil
+end
+
+---triggers the given signal of the process
+function process.Process:triggerSignal(signal)
+	local handler = self.signalHandlers[signal]
+	if handler then
+		handler(self)
+	end
+end
+
+---@return Process
 function process.create(func, ...)
 	local p, index
 	if type(func) == "thread" then
@@ -71,6 +103,7 @@ function process.create(func, ...)
 		}
 	end
 	
+	p.shared = {}
 	p.parent = process.running()
 	p.signalHandlers = {}
 	p.signalHandlers[process.SIGINT] = function(proc)
@@ -92,30 +125,8 @@ function process.create(func, ...)
 	table.insert(_process.processes, p)
 	_process.processes[p.mainThread.co] = #_process.processes
 	
-	function p:isRunning()
-		local status = self.mainThread:status()
-		return status == "suspended" or status == "running"
-	end
-	
-	function p:await()
-		while self:isRunning() do
-			coroutine.yield()
-		end
-	end
-	
-	function p:kill()
-		p.mainThread:stop()
-		table.remove(_process.processes, _process.processes[p.mainThread.co])
-		_process.processes[p.mainThread.co] = nil
-	end
-	
-	function p:triggerSignal(signal)
-		local handler = self.signalHandlers[signal]
-		if handler then
-			handler(self)
-		end
-	end
-
+	setmetatable(p, process.Process)
+	process.Process.__index = process.Process
 	return p
 end
 
@@ -149,6 +160,9 @@ local function createPipeStream()
 	function stream:read(length)
 		local str = self.buffer:sub(1, length)
 		self.buffer = self.buffer:sub(length+1)
+		if str:len() < 1 then
+			str = ""
+		end
 		return str
 	end
 	
@@ -175,6 +189,18 @@ end
 
 function process.getProcessByID(pid)
 	return _process.processes[_process.processIDs[pid]]
+end
+
+function process.handleProcesses()
+	local i = 1
+	while i <= #_process.processIDs do
+		local proc = process.getProcessByID(_process.processIDs[i])
+		if not proc:isRunning() then
+			i = i - 1
+			proc:kill()
+		end
+		i = i + 1
+	end
 end
 
 return process

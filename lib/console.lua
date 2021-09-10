@@ -19,7 +19,7 @@ function console.createConsole()
 	local obj = term.createTTY()
 
 	function obj:tick()
-		local str = self.input:read(512)
+		local str = self.input:read(2048)
 		self:write(str)
 	end
 

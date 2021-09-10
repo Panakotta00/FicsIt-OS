@@ -65,7 +65,7 @@ function threadLib.tick()
 		_thread.current = _thread.current + 1
 		local tickThread = _thread.threads[_thread.current]
 		if not tickThread.ignore then
-			local results = {coroutine.resume(true, tickThread.co, table.unpack(tickThread.params))}
+			local results = {coroutine.resume(tickThread.co, table.unpack(tickThread.params))}
 			local success, e = results[1], results[2]
 			if coroutine.status(tickThread.co) == "dead" then
 				if not success then
@@ -85,7 +85,7 @@ function threadLib.tick()
 				end
 				tickThread.results = results
 				tickThread:stop()
-			elseif not success then
+			elseif results[2] then
 				runWithoutLimit = false
 			end
 		end

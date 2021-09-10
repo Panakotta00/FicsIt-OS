@@ -273,7 +273,9 @@ shell.write("\x1B[1049h")
 resize()
 draw()
 
+local start = computer.millis()
 while true do
+	computer.promote()
 	if inputBuffer:len() == 0 then
 		inputBuffer = shell.read(512)
 	end
@@ -287,7 +289,12 @@ while true do
 				return c
 			end
 		end
+		if computer.millis() - start > 20 then
+			coroutine.skip()
+			start = computer.millis()
+		end
 	else
+		start = computer.millis()
 		if bDone then
 			if bUpdateScreen then
 				bUpdateScreen = false,
@@ -323,6 +330,6 @@ while true do
 			end
 		end
 		coroutine.yield()
-		computer.skip()
+		computer.promote()
 	end
 end

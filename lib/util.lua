@@ -65,4 +65,11 @@ function util.deepCopy(table)
 	return newTable
 end
 
+function util.sleep(ms)
+	local start = computer.millis()
+	while computer.millis() - start < ms do
+		coroutine.yield()
+	end
+end
+
 return util
