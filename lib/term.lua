@@ -36,7 +36,7 @@ function term.nextToken(text) -- leftover, tokentype, tokendata
 	if c == "\x04" then
 		return text:sub(2), nil, nil
 	end
-	if c == "\x1B" and len >= 3 then
+	if c == "\x1B" and len >= 2 then
 		if text:find(csiFullHeadPattern) == 1 then
 			local csiKeyPos = text:find(csiKeyPattern)
 			if csiKeyPos then
@@ -62,7 +62,7 @@ function term.nextToken(text) -- leftover, tokentype, tokendata
 					end
 					return text:sub(csiKeyPos +1), "csi", { c=e, p1=p1, p2=p2, t=a}
 				else
-					return text:sub(4), "text", text:sub(1, 3)
+					return text:sub(3), "text", text:sub(1, 2)
 				end
 			else
 				return text, nil, nil

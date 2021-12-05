@@ -40,10 +40,18 @@ function threadLib.create(func, ...)
 	end
 
 	function thread:stop()
+		if not _thread.threads[self] then
+			return
+		end
 		table.remove(_thread.threads, _thread.threads[self])
 		_thread.threads[self] = nil
 		_thread.threads[self.co] = nil
 		self.results = {}
+		for k, v in pairs(_thread.threads) do
+			if type(v) == "number" then
+				_thread.threads[k] = v - 1
+			end
+		end
 	end
 	
 	function thread:status()

@@ -95,6 +95,11 @@ local function loadUnit(unit)
 end
 
 local function reloadUnits()
+    if not filesystem.exists("/etc/systemd.json") then
+        local file = filesystem.open("/etc/systemd.json")
+        file:write("{}")
+        file:close()
+    end
 	local configFile = buffer.create("r", filesystem.open("/etc/systemd.json"))
 	local config = json.decode(configFile:read("a"))
 	configFile:close()
