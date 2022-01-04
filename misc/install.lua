@@ -91,7 +91,7 @@ local tree = {
 	},
 	{
 	    "etc",
-	    {"systemd.lua"}
+	    {"systemd.json"}
     }
 }
 
