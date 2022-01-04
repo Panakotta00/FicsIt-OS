@@ -88,7 +88,11 @@ local tree = {
 		{"term.lua"},
 		{"thread.lua"},
 		{"util.lua"},
-	}
+	},
+	{
+	    "etc",
+	    {"systemd.lua"}
+    }
 }
 
 function doEntry(parentPath, entry)

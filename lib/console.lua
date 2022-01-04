@@ -25,7 +25,7 @@ function console.createConsole()
 
 	function obj:handleInput(e, s, c, b, m)
 		if e == "OnKeyDown" then
-			print(e, s, c, b, m)
+			--print(e, s, c, b, m)
 			local text = self.inputText
 			if b == 35 then
 				-- end
